@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor 3D Universal</title>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <style>
+        /* Ocupar toda la pantalla y centrar */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #f5f5f5; }
+        model-viewer { width: 100%; height: 100%; --poster-color: transparent; }
+        .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: sans-serif; color: #666; }
+    </style>
+</head>
+<body>
+    <div id="loader" class="loading">Cargando modelo...</div>
+
+    <model-viewer 
+        id="viewer"
+        src="" 
+        alt="Modelo 3D"
+        auto-rotate
+        camera-controls
+        ar
+        shadow-intensity="1"
+        bounds="tight" 
+        enable-pan>
+    </model-viewer>
+
+    <script>
+        // 1. Leer la URL del modelo desde los parámetros (?modelo=...)
+        const params = new URLSearchParams(window.location.search);
+        const urlModelo = params.get('modelo');
+        const visor = document.getElementById('viewer');
+        const loader = document.getElementById('loader');
+
+        if (urlModelo) {
+            // 2. Asignar el modelo al visor
+            visor.src = urlModelo;
+            
+            // 3. Ocultar texto de carga cuando termine
+            visor.addEventListener('load', () => {
+                loader.style.display = 'none';
+            });
+            
+            // 4. Manejo de errores
+            visor.addEventListener('error', (e) => {
+                loader.innerHTML = "❌ Error: No se pudo cargar el archivo.<br>Verifica el enlace.";
+                loader.style.color = "red";
+                console.error(e);
+            });
+        } else {
+            loader.innerHTML = "⚠️ No se especificó ningún archivo 3D en la URL.";
+        }
+    </script>
+</body>
+</html>
