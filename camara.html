@@ -27,20 +27,22 @@
         .btn-capturar:active { transform: scale(0.9); }
 
         .btn-switch {
-            width: 50px; height: 50px; border-radius: 50%;
+            width: 55px; height: 55px; border-radius: 50%;
             border: 2px solid rgba(255,255,255,0.5); background-color: rgba(255,255,255,0.1);
             color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background-color 0.3s;
         }
+        .btn-switch:hover { background-color: rgba(255,255,255,0.2); }
         
         #mensaje { 
             position: absolute; top: 40%; width: 100%; text-align: center; 
             display: none; padding: 20px; box-sizing: border-box; 
         }
 
-        /* Nuevo Icono intuitivo de Cámara + Flechas */
+        /* Icono intuitivo de Cámara + Flechas */
         .icon-camera-switch {
-            width: 30px;
-            height: 30px;
+            width: 32px;
+            height: 32px;
             fill: white;
             display: block;
         }
@@ -57,21 +59,23 @@
 
     <div class="controles">
         <button class="btn-switch" onclick="cambiarCamara()" title="Cambiar Cámara">
-            <div class="icon-refresh"></div>
+            <svg class="icon-camera-switch" viewBox="0 0 24 24">
+                <path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm-3.2-5h1.1c.14-.93.69-1.72 1.45-2.19l-.58-1.01C9.61 10.45 8.92 11.64 8.8 13zm6.4 0h-1.1c-.14.93-.69 1.72-1.45 2.19l.58 1.01c1.16-.65 1.85-1.84 1.97-3.01z"/>
+            </svg>
         </button>
 
         <button class="btn-capturar" onclick="tomarFoto()"></button>
         
-        <div style="width: 50px;"></div>
+        <div style="width: 55px;"></div>
     </div>
 
     <script>
         const video = document.getElementById('video');
         const mensaje = document.getElementById('mensaje');
         let currentStream = null;
-        let modoCamara = "user"; // Inicia con frontal
+        let modoCamara = "user"; // Inicia con cámara frontal
 
-        // 1. FUNCIÓN PRINCIPAL PARA ENCENDER CÁMARA
+        // 1. FUNCIÓN PARA ENCENDER CÁMARA
         async function encenderCamara() {
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
@@ -91,33 +95,33 @@
                 mensaje.style.display = 'none';
                 video.style.display = 'block';
             } catch (err) {
-                console.error("Error de acceso:", err);
+                console.error("Error de acceso a cámara:", err);
                 video.style.display = 'none';
                 mensaje.style.display = 'block';
             }
         }
 
-        // 2. FUNCIÓN PARA INTERCAMBIAR
+        // 2. FUNCIÓN PARA INTERCAMBIAR CÁMARAS
         function cambiarCamara() {
             modoCamara = (modoCamara === "user") ? "environment" : "user";
             encenderCamara();
         }
 
-        // 3. ESCUCHAR SOLICITUD DESDE EL ERP (Botón externo)
+        // 3. ESCUCHAR SOLICITUD DESDE EL ERP
         window.addEventListener('message', function(event) {
             if (event.data && event.data.tipo === 'CAMBIAR_CAMARA_SOLICITUD') {
                 cambiarCamara();
             }
         });
 
-        // 4. TOMAR FOTO Y ENVIAR AL ERP
+        // 4. CAPTURAR Y ENVIAR
         function tomarFoto() {
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
             
-            // Si es cámara frontal, invertimos para que no salga "espejo" en el registro
+            // Efecto espejo solo en cámara frontal para que el registro sea natural
             if (modoCamara === "user") {
                 ctx.translate(canvas.width, 0);
                 ctx.scale(-1, 1);
@@ -136,9 +140,8 @@
             window.close();
         }
 
-        // Iniciar al cargar
+        // Inicializar al abrir
         encenderCamara();
     </script>
 </body>
 </html>
-
