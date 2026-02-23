@@ -3,26 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cámara Kiosco</title>
+    <title>Cámara Segura - ERP Zúñiga</title>
     <style>
         body { 
             margin: 0; padding: 0; background-color: #000; color: white;
             display: flex; flex-direction: column; height: 100vh; overflow: hidden;
             font-family: sans-serif;
         }
-        #video { width: 100%; height: 100%; object-fit: cover; }
+        #video { width: 100%; height: 100%; object-fit: cover; background-color: #111; }
+        
         .controles {
-            position: absolute; bottom: 0; width: 100%; padding: 20px;
-            display: flex; justify-content: center;
+            position: absolute; bottom: 0; width: 100%; padding: 30px 0;
+            display: flex; justify-content: center; align-items: center; gap: 40px;
             background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
         }
+
         .btn-capturar {
-            width: 75px; height: 75px; border-radius: 50%;
-            border: 5px solid white; background-color: #00a9e0;
-            cursor: pointer; outline: none; transition: transform 0.1s;
+            width: 80px; height: 80px; border-radius: 50%;
+            border: 6px solid white; background-color: #00a9e0;
+            cursor: pointer; outline: none; transition: all 0.2s;
+            box-shadow: 0 0 20px rgba(0, 169, 224, 0.5);
         }
         .btn-capturar:active { transform: scale(0.9); }
-        #mensaje { position: absolute; top: 40%; width: 100%; text-align: center; display: none; padding: 20px; box-sizing: border-box; }
+
+        .btn-switch {
+            width: 50px; height: 50px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.5); background-color: rgba(255,255,255,0.1);
+            color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        
+        #mensaje { 
+            position: absolute; top: 40%; width: 100%; text-align: center; 
+            display: none; padding: 20px; box-sizing: border-box; 
+        }
+
+        /* Icono de rotar simple con CSS */
+        .icon-refresh {
+            width: 20px; height: 20px; border: 2px solid white;
+            border-radius: 50%; border-top-color: transparent;
+        }
     </style>
 </head>
 <body>
@@ -31,53 +50,92 @@
     
     <div id="mensaje">
         <h2 style="color: #ff4757;">Cámara bloqueada</h2>
-        <p>Por favor, haz clic en el candado de la barra de direcciones y permite el uso de la cámara.</p>
+        <p>Por favor, permite el uso de la cámara en este navegador para registrar tu asistencia.</p>
     </div>
 
     <div class="controles">
+        <button class="btn-switch" onclick="cambiarCamara()" title="Cambiar Cámara">
+            <div class="icon-refresh"></div>
+        </button>
+
         <button class="btn-capturar" onclick="tomarFoto()"></button>
+        
+        <div style="width: 50px;"></div>
     </div>
 
     <script>
         const video = document.getElementById('video');
         const mensaje = document.getElementById('mensaje');
-        const btn = document.querySelector('.btn-capturar');
+        let currentStream = null;
+        let modoCamara = "user"; // Inicia con frontal
 
-        // 1. Encender la cámara al abrir la ventana
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 1280}, height: {ideal: 720} } })
-            .then(stream => {
-                video.srcObject = stream;
-            })
-            .catch(err => {
-                console.error("Error de cámara:", err);
+        // 1. FUNCIÓN PRINCIPAL PARA ENCENDER CÁMARA
+        async function encenderCamara() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            const constraints = { 
+                video: { 
+                    facingMode: modoCamara, 
+                    width: { ideal: 1280 }, 
+                    height: { ideal: 720 } 
+                } 
+            };
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+                mensaje.style.display = 'none';
+                video.style.display = 'block';
+            } catch (err) {
+                console.error("Error de acceso:", err);
                 video.style.display = 'none';
-                btn.style.display = 'none';
                 mensaje.style.display = 'block';
-            });
+            }
+        }
 
-        // 2. Tomar foto y mandarla a Google
+        // 2. FUNCIÓN PARA INTERCAMBIAR
+        function cambiarCamara() {
+            modoCamara = (modoCamara === "user") ? "environment" : "user";
+            encenderCamara();
+        }
+
+        // 3. ESCUCHAR SOLICITUD DESDE EL ERP (Botón externo)
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.tipo === 'CAMBIAR_CAMARA_SOLICITUD') {
+                cambiarCamara();
+            }
+        });
+
+        // 4. TOMAR FOTO Y ENVIAR AL ERP
         function tomarFoto() {
-            // Dibujar el video en un canvas (lienzo)
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+            const ctx = canvas.getContext('2d');
             
-            // Convertir a texto Base64
+            // Si es cámara frontal, invertimos para que no salga "espejo" en el registro
+            if (modoCamara === "user") {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const fotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
             
-            // MAGIA: Enviar la foto a la ventana que abrió este pop-up (Tu ERP)
             if (window.opener) {
                 window.opener.postMessage({ tipo: 'FOTO_KIOSCO_OK', foto: fotoBase64 }, '*');
             }
             
-            // Apagar la luz de la cámara y cerrar la ventanita
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
             }
             window.close();
         }
+
+        // Iniciar al cargar
+        encenderCamara();
     </script>
 </body>
-
 </html>
