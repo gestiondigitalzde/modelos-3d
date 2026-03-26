@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carnet - ERP Zúñiga</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        #estado {
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(0,169,224,0.3);
+            border-top-color: #00a9e0;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        canvas { display: none; }
+        #btn-descargar {
+            margin-top: 20px;
+            padding: 12px 30px;
+            background: #00a9e0;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: none;
+        }
+        #btn-descargar:hover { background: #008cba; }
+        #preview {
+            display: none;
+            margin-top: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+<div id="estado">
+    <div class="spinner" id="spinner"></div>
+    <p id="texto-estado">Generando carnet...</p>
+</div>
+
+<canvas id="canvas"></canvas>
+<img id="preview">
+<button id="btn-descargar" onclick="descargar()">⬇ Descargar Carnet</button>
+
+<script>
+    // ==========================================
+    // 1. LEER PARÁMETROS DE LA URL
+    // ==========================================
+    const params = new URLSearchParams(window.location.search);
+    const nombre    = decodeURIComponent(params.get('nombre') || '');
+    const apellido  = decodeURIComponent(params.get('apellido') || '');
+    const id        = params.get('id') || '';
+    const tipo      = params.get('tipo') || 'P';
+    const puesto    = decodeURIComponent(params.get('puesto') || '');
+    const fotoId    = params.get('foto') || '';
+    const qrId      = params.get('qr') || '';
+    const logoId    = params.get('logo') || '';
+
+    const nombreCompleto = (nombre + ' ' + apellido).trim().toUpperCase();
+    const esPLANTA = tipo === 'P';
+
+    // ==========================================
+    // 2. URLS DE IMÁGENES (sin CORS aquí)
+    // ==========================================
+    const logoUrl = 'https://drive.google.com/thumbnail?id=' + logoId + '&sz=w200';
+    const fotoUrl = 'https://drive.google.com/thumbnail?id=' + fotoId + '&sz=w300';
+    const qrUrl   = 'https://drive.google.com/thumbnail?id=' + qrId   + '&sz=w250';
+
+    // ==========================================
+    // 3. CARGAR IMÁGENES
+    // ==========================================
+    function cargarImagen(url) {
+        return new Promise(function(resolve, reject) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload  = function() { resolve(img); };
+            img.onerror = function() { reject(new Error('Error cargando: ' + url)); };
+            img.src = url;
+        });
+    }
+
+    Promise.all([
+        cargarImagen(logoUrl),
+        cargarImagen(fotoUrl),
+        cargarImagen(qrUrl)
+    ]).then(function(imgs) {
+        generarCarnet(imgs[0], imgs[1], imgs[2]);
+    }).catch(function(err) {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('texto-estado').innerText = 'Error al cargar imágenes. Verifica que los archivos sean públicos en Drive.';
+        console.error(err);
+    });
+
+    // ==========================================
+    // 4. GENERAR EL CARNET EN CANVAS
+    // ==========================================
+    function generarCarnet(imgLogo, imgFoto, imgQR) {
+        const canvas = document.getElementById('canvas');
+        const W = 420;
+        const H = 700;
+        canvas.width  = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+
+        // FONDO BLANCO
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+
+        // HEXÁGONOS DECORATIVOS
+        dibujarHexagonos(ctx, W, H);
+
+        // FRANJA SUPERIOR
+        ctx.fillStyle = '#00a9e0';
+        ctx.fillRect(0, 0, W, 8);
+
+        // FRANJA INFERIOR
+        ctx.fillStyle = '#00a9e0';
+        ctx.fillRect(0, H - 8, W, 8);
+
+        // LOGO
+        const logoW = 110;
+        const logoH = (imgLogo.height / imgLogo.width) * logoW;
+        const logoX = (W - logoW) / 2;
+        const logoY = 24;
+        ctx.drawImage(imgLogo, logoX, logoY, logoW, logoH);
+
+        // LÍNEA SEPARADORA BAJO EL LOGO
+        ctx.strokeStyle = 'rgba(0,169,224,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(40, logoY + logoH + 12);
+        ctx.lineTo(W - 40, logoY + logoH + 12);
+        ctx.stroke();
+
+        // FOTO CIRCULAR
+        const fotoSize = 150;
+        const fotoX = (W - fotoSize) / 2;
+        const fotoY = logoY + logoH + 25;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(fotoX + fotoSize/2, fotoY + fotoSize/2, fotoSize/2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(imgFoto, fotoX, fotoY, fotoSize, fotoSize);
+        ctx.restore();
+
+        // BORDE FOTO
+        ctx.beginPath();
+        ctx.arc(fotoX + fotoSize/2, fotoY + fotoSize/2, fotoSize/2, 0, Math.PI * 2);
+        ctx.strokeStyle = '#00a9e0';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+
+        // NOMBRE
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#00a9e0';
+        ctx.font = 'bold 20px Arial';
+
+        const palabras = nombreCompleto.split(' ');
+        const mitad = Math.ceil(palabras.length / 2);
+        const linea1 = palabras.slice(0, mitad).join(' ');
+        const linea2 = palabras.slice(mitad).join(' ');
+
+        let nombreY = fotoY + fotoSize + 35;
+        ctx.fillText(linea1, W/2, nombreY);
+        if (linea2) {
+            ctx.fillText(linea2, W/2, nombreY + 26);
+            nombreY += 26;
+        }
+
+        // ID
+        ctx.fillStyle = '#333333';
+        ctx.font = 'bold 17px Arial';
+        ctx.fillText('ID ' + id, W/2, nombreY + 32);
+
+        // PUESTO (solo planta)
+        let badgeY = nombreY + 60;
+        if (esPLANTA && puesto) {
+            ctx.fillStyle = '#666666';
+            ctx.font = '14px Arial';
+            ctx.fillText(puesto.toUpperCase(), W/2, nombreY + 56);
+            badgeY = nombreY + 80;
+        }
+
+        // BADGE TIPO
+        const badgeW = 110;
+        const badgeH = 28;
+        const badgeX = (W - badgeW) / 2;
+        ctx.beginPath();
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 14);
+        ctx.fillStyle = esPLANTA ? '#00a9e0' : '#f59e0b';
+        ctx.fill();
+        ctx.fillStyle = esPLANTA ? '#ffffff' : '#000000';
+        ctx.font = 'bold 13px Arial';
+        ctx.fillText(esPLANTA ? 'PLANTA' : 'EVENTUAL', W/2, badgeY + 18);
+
+        // QR
+        const qrSize = 170;
+        const qrX = (W - qrSize) / 2;
+        const qrY = badgeY + badgeH + 20;
+
+        // Fondo blanco para el QR
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(qrX - 8, qrY - 8, qrSize + 16, qrSize + 16, 12);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,169,224,0.3)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.drawImage(imgQR, qrX, qrY, qrSize, qrSize);
+
+        // CÓDIGO TEXTO
+        ctx.fillStyle = '#aaaaaa';
+        ctx.font = '11px Arial';
+        ctx.fillText(generarCodigoTexto(), W/2, qrY + qrSize + 20);
+
+        // MOSTRAR PREVIEW Y BOTÓN
+        const preview = document.getElementById('preview');
+        preview.src = canvas.toDataURL('image/png');
+        preview.style.display = 'block';
+        preview.style.width = '280px';
+
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('texto-estado').innerText = 'Carnet listo';
+        document.getElementById('btn-descargar').style.display = 'inline-block';
+
+        // Descarga automática
+        descargar();
+    }
+
+    // ==========================================
+    // 5. FUNCIÓN DE DESCARGA
+    // ==========================================
+    function descargar() {
+        const canvas = document.getElementById('canvas');
+        const link = document.createElement('a');
+        link.download = 'Carnet_' + tipo + '_' + id + '_' + nombre + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
+    // ==========================================
+    // 6. HEXÁGONOS DECORATIVOS
+    // ==========================================
+    function dibujarHexagonos(ctx, W, H) {
+        var color1 = 'rgba(0, 169, 224, 0.12)';
+        var color2 = 'rgba(0, 169, 224, 0.06)';
+
+        // Esquina superior derecha
+        dibujarHex(ctx, W - 25, -15, 60, color1);
+        dibujarHex(ctx, W - 85, 25,  42, color2);
+        dibujarHex(ctx, W - 15, 65,  38, color2);
+        dibujarHex(ctx, W - 115, -5, 32, color2);
+
+        // Esquina inferior izquierda
+        dibujarHex(ctx, 25,  H + 15, 60, color1);
+        dibujarHex(ctx, 85,  H - 25, 42, color2);
+        dibujarHex(ctx, 15,  H - 65, 38, color2);
+        dibujarHex(ctx, 115, H + 5,  32, color2);
+    }
+
+    function dibujarHex(ctx, cx, cy, size, color) {
+        ctx.beginPath();
+        for (var i = 0; i < 6; i++) {
+            var angle = Math.PI / 180 * (60 * i - 30);
+            var x = cx + size * Math.cos(angle);
+            var y = cy + size * Math.sin(angle);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 169, 224, 0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    // ==========================================
+    // 7. RECONSTRUIR CÓDIGO QR
+    // ==========================================
+    function generarCodigoTexto() {
+        var prefijo = tipo === 'P' ? 'P' : 'E';
+        var secreto = 'ZDE2025ERP';
+        var base = String(id) + prefijo + secreto;
+        var hash = 0;
+        for (var i = 0; i < base.length; i++) {
+            hash = ((hash << 5) - hash) + base.charCodeAt(i);
+            hash |= 0;
+        }
+        var hashCorto = Math.abs(hash).toString(36).toUpperCase().substring(0, 4);
+        return 'ERP-' + prefijo + '-' + id + '-' + hashCorto;
+    }
+</script>
+</body>
+</html>
