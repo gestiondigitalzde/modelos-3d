@@ -3,145 +3,454 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cámara Segura - ERP Zúñiga</title>
+    <title>Cámara - ERP Zúñiga</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
     <style>
-        body { 
-            margin: 0; padding: 0; background-color: #000; color: white;
-            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
-            font-family: sans-serif;
-        }
-        #video { width: 100%; height: 100%; object-fit: cover; background-color: #111; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
-        .controles {
-            position: absolute; bottom: 0; width: 100%; padding: 30px 0;
-            display: flex; justify-content: center; align-items: center; gap: 40px;
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+        body { 
+            background: #0a0a0a;
+            color: white;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+
+        canvas#canvas-scan {
+            display: none;
+        }
+
+        /* OVERLAY SUPERIOR */
+        .overlay-top {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            z-index: 10;
+            padding: 12px 16px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo-text {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: #00a9e0;
+            letter-spacing: 1px;
+        }
+
+        .btn-switch {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.4);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+        /* OVERLAY INFERIOR */
+        .overlay-bottom {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            z-index: 10;
+            padding: 20px 16px 30px;
+            background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+            text-align: center;
+        }
+
+        /* MODO ESCÁNER */
+        #modo-scanner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .scan-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -60%);
+            width: 200px;
+            height: 200px;
+            z-index: 5;
+        }
+
+        .scan-frame::before,
+        .scan-frame::after {
+            content: '';
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            border-color: #00a9e0;
+            border-style: solid;
+        }
+        .scan-frame::before {
+            top: 0; left: 0;
+            border-width: 3px 0 0 3px;
+            border-radius: 4px 0 0 0;
+        }
+        .scan-frame::after {
+            bottom: 0; right: 0;
+            border-width: 0 3px 3px 0;
+            border-radius: 0 0 4px 0;
+        }
+
+        .scan-frame-corner {
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            border-color: #00a9e0;
+            border-style: solid;
+        }
+        .scan-frame-corner.tr {
+            top: 0; right: 0;
+            border-width: 3px 3px 0 0;
+            border-radius: 0 4px 0 0;
+        }
+        .scan-frame-corner.bl {
+            bottom: 0; left: 0;
+            border-width: 0 0 3px 3px;
+            border-radius: 0 0 0 4px;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -60%);
+            width: 200px;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #00a9e0, transparent);
+            z-index: 6;
+            animation: scanAnim 2s ease-in-out infinite;
+        }
+
+        @keyframes scanAnim {
+            0% { margin-top: -100px; opacity: 1; }
+            50% { margin-top: 100px; opacity: 1; }
+            100% { margin-top: -100px; opacity: 1; }
+        }
+
+        .scan-status {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: rgba(255,255,255,0.8);
+            letter-spacing: 0.5px;
+        }
+
+        .scan-status.detectado {
+            color: #22c55e;
+            animation: pulse 0.5s ease-in-out 3;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* MODO FOTO */
+        #modo-foto {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
         }
 
         .btn-capturar {
-            width: 80px; height: 80px; border-radius: 50%;
-            border: 6px solid white; background-color: #00a9e0;
-            cursor: pointer; outline: none; transition: all 0.2s;
-            box-shadow: 0 0 20px rgba(0, 169, 224, 0.5);
+            width: 72px; height: 72px;
+            border-radius: 50%;
+            border: 5px solid white;
+            background: #00a9e0;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0,169,224,0.5);
+            transition: transform 0.15s;
         }
-        .btn-capturar:active { transform: scale(0.9); }
+        .btn-capturar:active { transform: scale(0.88); }
 
-        .btn-switch {
-            width: 55px; height: 55px; border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.5); background-color: rgba(255,255,255,0.1);
-            color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
-            transition: background-color 0.3s;
-        }
-        .btn-switch:hover { background-color: rgba(255,255,255,0.2); }
-        
-        #mensaje { 
-            position: absolute; top: 40%; width: 100%; text-align: center; 
-            display: none; padding: 20px; box-sizing: border-box; 
+        .foto-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 0.5px;
         }
 
-        /* Icono intuitivo de Cámara + Flechas */
-        .icon-camera-switch {
-            width: 32px;
-            height: 32px;
-            fill: white;
-            display: block;
+        /* FLASH al capturar */
+        #flash {
+            position: absolute;
+            inset: 0;
+            background: white;
+            opacity: 0;
+            z-index: 20;
+            pointer-events: none;
+            transition: opacity 0.1s;
+        }
+
+        /* ERROR */
+        #error-camara {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 30;
+            background: #0a0a0a;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            text-align: center;
+            padding: 24px;
+        }
+
+        #error-camara i {
+            font-size: 3rem;
+            color: #ef4444;
+        }
+
+        #error-camara p {
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.7);
+            line-height: 1.5;
         }
     </style>
 </head>
 <body>
 
-    <video id="video" autoplay playsinline></video>
-    
-    <div id="mensaje">
-        <h2 style="color: #ff4757;">Cámara bloqueada</h2>
-        <p>Por favor, permite el uso de la cámara en este navegador para registrar tu asistencia.</p>
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas-scan"></canvas>
+<div id="flash"></div>
+
+<!-- OVERLAY SUPERIOR -->
+<div class="overlay-top">
+    <span class="logo-text">ERP ZÚÑIGA</span>
+    <button class="btn-switch" onclick="cambiarCamara()" title="Cambiar cámara">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+            <path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+        </svg>
+    </button>
+</div>
+
+<!-- MARCO ESCÁNER QR -->
+<div class="scan-frame">
+    <div class="scan-frame-corner tr"></div>
+    <div class="scan-frame-corner bl"></div>
+</div>
+<div class="scan-line"></div>
+
+<!-- OVERLAY INFERIOR -->
+<div class="overlay-bottom">
+
+    <!-- MODO ESCÁNER (default) -->
+    <div id="modo-scanner">
+        <p class="scan-status" id="scan-status-text">Apunta el QR del carnet hacia la cámara</p>
     </div>
 
-    <div class="controles">
-        <button class="btn-switch" onclick="cambiarCamara()" title="Cambiar Cámara">
-            <svg class="icon-camera-switch" viewBox="0 0 24 24">
-                <path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm-3.2-5h1.1c.14-.93.69-1.72 1.45-2.19l-.58-1.01C9.61 10.45 8.92 11.64 8.8 13zm6.4 0h-1.1c-.14.93-.69 1.72-1.45 2.19l.58 1.01c1.16-.65 1.85-1.84 1.97-3.01z"/>
-            </svg>
-        </button>
-
+    <!-- MODO FOTO (cuando el kiosco lo pide) -->
+    <div id="modo-foto">
+        <p class="foto-label">MIRA A LA CÁMARA Y PRESIONA</p>
         <button class="btn-capturar" onclick="tomarFoto()"></button>
-        
-        <div style="width: 55px;"></div>
     </div>
 
-    <script>
-        const video = document.getElementById('video');
-        const mensaje = document.getElementById('mensaje');
-        let currentStream = null;
-        let modoCamara = "user"; // Inicia con cámara frontal
+</div>
 
-        // 1. FUNCIÓN PARA ENCENDER CÁMARA
-        async function encenderCamara() {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
+<!-- ERROR -->
+<div id="error-camara">
+    <p style="font-size:2rem;">📷</p>
+    <p>No se pudo acceder a la cámara.<br>Por favor permite el acceso en tu navegador.</p>
+</div>
 
-            const constraints = { 
-                video: { 
-                    facingMode: modoCamara, 
-                    width: { ideal: 1280 }, 
-                    height: { ideal: 720 } 
-                } 
-            };
+<script>
+    const video       = document.getElementById('video');
+    const canvasScan  = document.getElementById('canvas-scan');
+    const flash       = document.getElementById('flash');
+    const modoScanner = document.getElementById('modo-scanner');
+    const modoFoto    = document.getElementById('modo-foto');
+    const scanStatus  = document.getElementById('scan-status-text');
+    const errorDiv    = document.getElementById('error-camara');
 
-            try {
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = currentStream;
-                mensaje.style.display = 'none';
-                video.style.display = 'block';
-            } catch (err) {
-                console.error("Error de acceso a cámara:", err);
-                video.style.display = 'none';
-                mensaje.style.display = 'block';
-            }
+    let currentStream  = null;
+    let modoCamara     = 'environment'; // trasera por defecto en kiosco
+    let escaneando     = true;
+    let qrDetectado    = false;
+    let animFrameId    = null;
+
+    // ==========================================
+    // 1. ENCENDER CÁMARA
+    // ==========================================
+    async function encenderCamara() {
+        if (currentStream) {
+            currentStream.getTracks().forEach(t => t.stop());
         }
 
-        // 2. FUNCIÓN PARA INTERCAMBIAR CÁMARAS
-        function cambiarCamara() {
-            modoCamara = (modoCamara === "user") ? "environment" : "user";
-            encenderCamara();
+        try {
+            currentStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: modoCamara,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            });
+            video.srcObject = currentStream;
+            errorDiv.style.display = 'none';
+            iniciarEscaneoQR();
+        } catch(err) {
+            console.error('Error cámara:', err);
+            errorDiv.style.display = 'flex';
+        }
+    }
+
+    // ==========================================
+    // 2. ESCANEO CONTINUO DE QR
+    // ==========================================
+    function iniciarEscaneoQR() {
+        escaneando = true;
+        qrDetectado = false;
+
+        function tick() {
+            if (!escaneando) return;
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvasScan.width  = video.videoWidth;
+                canvasScan.height = video.videoHeight;
+                const ctx = canvasScan.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvasScan.width, canvasScan.height);
+
+                const imageData = ctx.getImageData(0, 0, canvasScan.width, canvasScan.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: 'dontInvert'
+                });
+
+                if (code && code.data && !qrDetectado) {
+                    const texto = code.data.trim();
+                    if (texto.startsWith('ERP-')) {
+                        qrDetectado = true;
+                        escaneando = false;
+                        onQRDetectado(texto);
+                        return;
+                    }
+                }
+            }
+
+            animFrameId = requestAnimationFrame(tick);
         }
 
-        // 3. ESCUCHAR SOLICITUD DESDE EL ERP
-        window.addEventListener('message', function(event) {
-            if (event.data && event.data.tipo === 'CAMBIAR_CAMARA_SOLICITUD') {
-                cambiarCamara();
-            }
-        });
+        animFrameId = requestAnimationFrame(tick);
+    }
 
-        // 4. CAPTURAR Y ENVIAR
-        function tomarFoto() {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            
-            // Efecto espejo solo en cámara frontal para que el registro sea natural
-            if (modoCamara === "user") {
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1);
-            }
-            
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const fotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
-            
-            if (window.opener) {
-                window.opener.postMessage({ tipo: 'FOTO_KIOSCO_OK', foto: fotoBase64 }, '*');
-            }
-            
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-            window.close();
+    // ==========================================
+    // 3. QR DETECTADO → AVISAR AL KIOSCO
+    // ==========================================
+    function onQRDetectado(codigo) {
+        scanStatus.innerText = '✓ QR detectado';
+        scanStatus.classList.add('detectado');
+
+        // Flash verde visual
+        flash.style.background = 'rgba(34, 197, 94, 0.3)';
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, 300);
+
+        // Mandar al kiosco
+        if (window.opener) {
+            window.opener.postMessage({ 
+                tipo: 'QR_KIOSCO_OK', 
+                codigo: codigo 
+            }, '*');
         }
 
-        // Inicializar al abrir
+        // Volver a escanear después de 2 segundos por si el kiosco no lo procesó
+        setTimeout(() => {
+            scanStatus.innerText = 'Apunta el QR del carnet hacia la cámara';
+            scanStatus.classList.remove('detectado');
+            qrDetectado = false;
+            escaneando = true;
+            iniciarEscaneoQR();
+        }, 2500);
+    }
+
+    // ==========================================
+    // 4. TOMAR FOTO (cuando el kiosco lo pide)
+    // ==========================================
+    function tomarFoto() {
+        const canvas = document.createElement('canvas');
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+
+        // Espejo solo en cámara frontal
+        if (modoCamara === 'user') {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const fotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
+        // Flash blanco
+        flash.style.background = 'white';
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, 200);
+
+        // Mandar foto al kiosco
+        if (window.opener) {
+            window.opener.postMessage({ 
+                tipo: 'FOTO_KIOSCO_OK', 
+                foto: fotoBase64 
+            }, '*');
+        }
+
+        // Volver a modo escáner
+        setTimeout(() => {
+            modoFoto.style.display    = 'none';
+            modoScanner.style.display = 'flex';
+            escaneando = true;
+            qrDetectado = false;
+            iniciarEscaneoQR();
+        }, 500);
+    }
+
+    // ==========================================
+    // 5. ESCUCHAR MENSAJES DEL KIOSCO
+    // ==========================================
+    window.addEventListener('message', function(event) {
+        // Solicitud de foto
+        if (event.data && event.data.tipo === 'SOLICITAR_FOTO') {
+            escaneando = false;
+            if (animFrameId) cancelAnimationFrame(animFrameId);
+
+            modoScanner.style.display = 'none';
+            modoFoto.style.display    = 'flex';
+        }
+
+        // Cambiar cámara desde el kiosco
+        if (event.data && event.data.tipo === 'CAMBIAR_CAMARA_SOLICITUD') {
+            cambiarCamara();
+        }
+    });
+
+    // ==========================================
+    // 6. CAMBIAR CÁMARA
+    // ==========================================
+    function cambiarCamara() {
+        modoCamara = modoCamara === 'user' ? 'environment' : 'user';
         encenderCamara();
-    </script>
+    }
+
+    // Iniciar
+    encenderCamara();
+</script>
 </body>
 </html>
