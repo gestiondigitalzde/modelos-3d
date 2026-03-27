@@ -69,7 +69,6 @@
         }
         .btn-switch:active { background: rgba(0,169,224,0.4); }
 
-        /* MARCO ESCÁNER */
         .scan-frame {
             position: absolute;
             top: 50%; left: 50%;
@@ -112,7 +111,6 @@
             border-radius: 0 0 0 4px;
         }
 
-        /* Marco verde cuando detecta QR */
         .scan-frame.detectado::before,
         .scan-frame.detectado::after,
         .scan-frame.detectado .corner {
@@ -164,7 +162,6 @@
             font-size: clamp(1rem, 4vw, 1.3rem);
         }
 
-        /* CUENTA REGRESIVA */
         .countdown-overlay {
             display: none;
             position: absolute;
@@ -238,9 +235,8 @@
 <canvas id="canvas"></canvas>
 <div id="flash"></div>
 
-<!-- CUENTA REGRESIVA -->
 <div class="countdown-overlay" id="countdown-overlay">
-    <div class="countdown-num" id="countdown-num">3</div>
+    <div class="countdown-num" id="countdown-num">2</div>
     <div class="countdown-label">Mira a la cámara</div>
 </div>
 
@@ -272,15 +268,15 @@
 </div>
 
 <script>
-    const video           = document.getElementById('video');
-    const canvas          = document.getElementById('canvas');
-    const flash           = document.getElementById('flash');
-    const statusText      = document.getElementById('status-text');
-    const errorDiv        = document.getElementById('error-camara');
-    const scanFrame       = document.getElementById('scan-frame');
-    const scanLine        = document.getElementById('scan-line');
+    const video            = document.getElementById('video');
+    const canvas           = document.getElementById('canvas');
+    const flash            = document.getElementById('flash');
+    const statusText       = document.getElementById('status-text');
+    const errorDiv         = document.getElementById('error-camara');
+    const scanFrame        = document.getElementById('scan-frame');
+    const scanLine         = document.getElementById('scan-line');
     const countdownOverlay = document.getElementById('countdown-overlay');
-    const countdownNum    = document.getElementById('countdown-num');
+    const countdownNum     = document.getElementById('countdown-num');
 
     let currentStream = null;
     let modoCamara    = 'environment';
@@ -318,16 +314,16 @@
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 canvas.width  = video.videoWidth;
                 canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
+                var ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                var code = jsQR(imageData.data, imageData.width, imageData.height, {
                     inversionAttempts: 'attemptBoth'
                 });
 
                 if (code && code.data && !qrDetectado) {
-                    const texto = code.data.trim();
+                    var texto = code.data.trim();
                     if (texto.startsWith('ERP-')) {
                         qrDetectado = true;
                         escaneando  = false;
@@ -342,7 +338,7 @@
         animFrameId = requestAnimationFrame(tick);
     }
 
-    // 3. QR DETECTADO → CUENTA REGRESIVA → FOTO
+    // 3. QR DETECTADO → ENVIAR CÓDIGO YA + CUENTA REGRESIVA DE 2 SEG
     function onQRDetectado(codigo) {
         // Marco verde
         scanFrame.classList.add('detectado');
@@ -353,13 +349,21 @@
         flash.style.opacity = '1';
         setTimeout(function() { flash.style.opacity = '0'; }, 300);
 
-        // Mostrar cuenta regresiva
-        statusText.classList.add('ok');
-        countdownOverlay.classList.add('visible');
+        // *** ENVIAR CÓDIGO AL ERP INMEDIATAMENTE para validar en paralelo ***
+        if (window.opener) {
+            window.opener.postMessage({ 
+                tipo: 'QR_VALIDAR_YA', 
+                codigo: codigo 
+            }, '*');
+        }
 
-        let cuenta = 3;
-        countdownNum.innerText = cuenta;
+        // Mostrar cuenta regresiva de 2 seg
+        countdownOverlay.classList.add('visible');
+        statusText.classList.add('ok');
         statusText.innerText = 'Mira a la camara...';
+
+        var cuenta = 2;
+        countdownNum.innerText = cuenta;
 
         var interval = setInterval(function() {
             cuenta--;
@@ -368,13 +372,13 @@
             } else {
                 clearInterval(interval);
                 countdownNum.innerText = '📸';
-                tomarFotoYEnviar(codigo);
+                tomarFotoYEnviar();
             }
         }, 1000);
     }
 
-    // 4. TOMAR FOTO Y ENVIAR TODO AL ERP
-    function tomarFotoYEnviar(codigo) {
+    // 4. TOMAR FOTO Y ENVIAR AL ERP
+    function tomarFotoYEnviar() {
         var fotoCanvas = document.createElement('canvas');
         fotoCanvas.width  = video.videoWidth;
         fotoCanvas.height = video.videoHeight;
@@ -386,29 +390,28 @@
         }
 
         ctx.drawImage(video, 0, 0, fotoCanvas.width, fotoCanvas.height);
-        var fotoBase64 = fotoCanvas.toDataURL('image/jpeg', 0.85);
+        var fotoBase64 = fotoCanvas.toDataURL('image/jpeg', 0.75);
 
-        // Flash blanco al tomar foto
+        // Flash blanco
         flash.style.background = 'white';
         flash.style.opacity = '1';
         setTimeout(function() { flash.style.opacity = '0'; }, 200);
 
-        // Mandar foto + código juntos al ERP
+        // Mandar solo la foto — el código ya se mandó antes
         if (window.opener) {
             window.opener.postMessage({ 
-                tipo: 'QR_Y_FOTO_OK', 
-                codigo: codigo,
+                tipo: 'QR_FOTO_LISTA', 
                 foto: fotoBase64
             }, '*');
         }
 
-        statusText.innerText = 'Registro procesando...';
+        statusText.innerText = 'Registrando...';
 
         // Cerrar ventana
         setTimeout(function() {
             if (currentStream) currentStream.getTracks().forEach(function(t) { t.stop(); });
             window.close();
-        }, 700);
+        }, 500);
     }
 
     // 5. CAMBIAR CÁMARA
