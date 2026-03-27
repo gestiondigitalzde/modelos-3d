@@ -2,469 +2,81 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cámara - ERP Zúñiga</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cámara Kiosco</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        html, body {
-            width: 100%; height: 100%;
-            background: #0a0a0a;
-            color: white;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
+        body { 
+            margin: 0; padding: 0; background-color: #000; color: white;
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+            font-family: sans-serif;
         }
-
-        #video {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            position: absolute;
-            top: 0; left: 0;
-            z-index: 1;
+        #video { width: 100%; height: 100%; object-fit: cover; }
+        .controles {
+            position: absolute; bottom: 0; width: 100%; padding: 20px;
+            display: flex; justify-content: center;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
         }
-
-        canvas#canvas-scan { display: none; }
-
-        #flash {
-            position: absolute;
-            inset: 0;
-            opacity: 0;
-            z-index: 20;
-            pointer-events: none;
-            transition: opacity 0.1s;
+        .btn-capturar {
+            width: 75px; height: 75px; border-radius: 50%;
+            border: 5px solid white; background-color: #00a9e0;
+            cursor: pointer; outline: none; transition: transform 0.1s;
         }
-
-        /* ── OVERLAY SUPERIOR ── */
-        .overlay-top {
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            z-index: 10;
-            padding: 14px 18px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .logo-text {
-            font-size: clamp(0.75rem, 3vw, 0.95rem);
-            font-weight: 800;
-            color: #00a9e0;
-            letter-spacing: 1px;
-        }
-
-        .btn-switch {
-            width: clamp(38px, 8vw, 46px);
-            height: clamp(38px, 8vw, 46px);
-            border-radius: 50%;
-            border: 1.5px solid rgba(255,255,255,0.4);
-            background: rgba(0,0,0,0.4);
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
-            transition: background 0.2s;
-            touch-action: manipulation;
-        }
-        .btn-switch:active { background: rgba(0,169,224,0.4); }
-
-        /* ── MARCO ESCÁNER ── */
-        .scan-frame {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -58%);
-            width: clamp(160px, 45vw, 220px);
-            height: clamp(160px, 45vw, 220px);
-            z-index: 5;
-            pointer-events: none;
-        }
-
-        .scan-frame::before,
-        .scan-frame::after,
-        .scan-frame-corner {
-            content: '';
-            position: absolute;
-            width: clamp(28px, 8vw, 38px);
-            height: clamp(28px, 8vw, 38px);
-            border-color: #00a9e0;
-            border-style: solid;
-        }
-        .scan-frame::before {
-            top: 0; left: 0;
-            border-width: 3px 0 0 3px;
-            border-radius: 4px 0 0 0;
-        }
-        .scan-frame::after {
-            bottom: 0; right: 0;
-            border-width: 0 3px 3px 0;
-            border-radius: 0 0 4px 0;
-        }
-        .scan-frame-corner {
-            position: absolute;
-            width: clamp(28px, 8vw, 38px);
-            height: clamp(28px, 8vw, 38px);
-            border-color: #00a9e0;
-            border-style: solid;
-        }
-        .scan-frame-corner.tr {
-            top: 0; right: 0;
-            border-width: 3px 3px 0 0;
-            border-radius: 0 4px 0 0;
-        }
-        .scan-frame-corner.bl {
-            bottom: 0; left: 0;
-            border-width: 0 0 3px 3px;
-            border-radius: 0 0 0 4px;
-        }
-
-        .scan-line {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -58%);
-            width: clamp(160px, 45vw, 220px);
-            height: 2px;
-            background: linear-gradient(to right, transparent, #00a9e0, transparent);
-            z-index: 6;
-            pointer-events: none;
-            animation: scanAnim 2s ease-in-out infinite;
-        }
-
-        @keyframes scanAnim {
-            0%   { margin-top: calc(clamp(160px, 45vw, 220px) / -2); opacity: 1; }
-            50%  { margin-top: calc(clamp(160px, 45vw, 220px) / 2);  opacity: 1; }
-            100% { margin-top: calc(clamp(160px, 45vw, 220px) / -2); opacity: 1; }
-        }
-
-        /* ── OVERLAY INFERIOR ── */
-        .overlay-bottom {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            z-index: 10;
-            padding: clamp(14px, 4vw, 24px) clamp(14px, 4vw, 20px) clamp(20px, 5vw, 36px);
-            background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
-            text-align: center;
-        }
-
-        /* MODO ESCÁNER */
-        #modo-scanner {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .scan-status {
-            font-size: clamp(0.75rem, 3vw, 0.9rem);
-            font-weight: 700;
-            color: rgba(255,255,255,0.8);
-            letter-spacing: 0.5px;
-        }
-        .scan-status.detectado {
-            color: #22c55e;
-            animation: blink 0.5s ease-in-out 3;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.2; }
-        }
-
-        /* MODO FOTO - countdown */
-        #modo-foto {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .foto-label {
-            font-size: clamp(0.75rem, 3vw, 0.9rem);
-            font-weight: 800;
-            color: white;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        .countdown {
-            font-size: clamp(2rem, 10vw, 3.5rem);
-            font-weight: 900;
-            color: #00a9e0;
-            line-height: 1;
-            text-shadow: 0 0 20px rgba(0,169,224,0.6);
-            animation: countPulse 1s ease-in-out infinite;
-        }
-        @keyframes countPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-
-        /* ── ERROR ── */
-        #error-camara {
-            display: none;
-            position: absolute;
-            inset: 0;
-            z-index: 30;
-            background: #0a0a0a;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 14px;
-            text-align: center;
-            padding: 28px;
-        }
-        #error-camara p {
-            font-size: clamp(0.85rem, 3.5vw, 1rem);
-            color: rgba(255,255,255,0.7);
-            line-height: 1.6;
-        }
-
-        /* ── RESPONSIVE TABLET / LANDSCAPE ── */
-        @media (orientation: landscape) and (max-height: 500px) {
-            .scan-frame, .scan-line {
-                top: 50%;
-                transform: translate(-50%, -50%);
-            }
-            .scan-line { margin-top: 0; }
-        }
+        .btn-capturar:active { transform: scale(0.9); }
+        #mensaje { position: absolute; top: 40%; width: 100%; text-align: center; display: none; padding: 20px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
-<video id="video" autoplay playsinline muted></video>
-<canvas id="canvas-scan"></canvas>
-<div id="flash"></div>
-
-<!-- OVERLAY SUPERIOR -->
-<div class="overlay-top">
-    <span class="logo-text">ERP ZÚÑIGA</span>
-    <button class="btn-switch" onclick="cambiarCamara()" title="Cambiar cámara">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-            <path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-        </svg>
-    </button>
-</div>
-
-<!-- MARCO QR -->
-<div class="scan-frame">
-    <div class="scan-frame-corner tr"></div>
-    <div class="scan-frame-corner bl"></div>
-</div>
-<div class="scan-line"></div>
-
-<!-- OVERLAY INFERIOR -->
-<div class="overlay-bottom">
-
-    <div id="modo-scanner">
-        <p class="scan-status" id="scan-status-text">
-            Apunta el QR del carnet hacia la cámara
-        </p>
+    <video id="video" autoplay playsinline></video>
+    
+    <div id="mensaje">
+        <h2 style="color: #ff4757;">Cámara bloqueada</h2>
+        <p>Por favor, haz clic en el candado de la barra de direcciones y permite el uso de la cámara.</p>
     </div>
 
-    <div id="modo-foto">
-        <p class="foto-label">Mira a la cámara</p>
-        <div class="countdown" id="countdown-num">3</div>
+    <div class="controles">
+        <button class="btn-capturar" onclick="tomarFoto()"></button>
     </div>
 
-</div>
+    <script>
+        const video = document.getElementById('video');
+        const mensaje = document.getElementById('mensaje');
+        const btn = document.querySelector('.btn-capturar');
 
-<div id="error-camara">
-    <p style="font-size:2.5rem;">📷</p>
-    <p>No se pudo acceder a la cámara.<br>Permite el acceso en tu navegador e intenta de nuevo.</p>
-    <button onclick="encenderCamara()" style="margin-top:12px; padding:10px 24px; border-radius:20px; border:none; background:#00a9e0; color:white; font-weight:800; cursor:pointer;">
-        Reintentar
-    </button>
-</div>
-
-<script>
-    const video       = document.getElementById('video');
-    const canvasScan  = document.getElementById('canvas-scan');
-    const flash       = document.getElementById('flash');
-    const modoScanner = document.getElementById('modo-scanner');
-    const modoFoto    = document.getElementById('modo-foto');
-    const scanStatus  = document.getElementById('scan-status-text');
-    const errorDiv    = document.getElementById('error-camara');
-    const countdownEl = document.getElementById('countdown-num');
-
-    let currentStream = null;
-    let modoCamara    = 'environment';
-    let escaneando    = true;
-    let qrDetectado   = false;
-    let animFrameId   = null;
-
-    // ==========================================
-    // 1. ENCENDER CÁMARA
-    // ==========================================
-    async function encenderCamara() {
-        if (currentStream) {
-            currentStream.getTracks().forEach(t => t.stop());
-        }
-        errorDiv.style.display = 'none';
-
-        try {
-            currentStream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: modoCamara,
-                    width:  { ideal: 1280 },
-                    height: { ideal: 720 }
-                }
+        // 1. Encender la cámara al abrir la ventana
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: {ideal: 1280}, height: {ideal: 720} } })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Error de cámara:", err);
+                video.style.display = 'none';
+                btn.style.display = 'none';
+                mensaje.style.display = 'block';
             });
-            video.srcObject = currentStream;
-            await video.play();
-            iniciarEscaneoQR();
-        } catch(err) {
-            console.error('Error cámara:', err);
-            errorDiv.style.display = 'flex';
-        }
-    }
 
-    // ==========================================
-    // 2. ESCANEO CONTINUO DE QR
-    // ==========================================
-    function iniciarEscaneoQR() {
-        if (animFrameId) cancelAnimationFrame(animFrameId);
-        escaneando  = true;
-        qrDetectado = false;
-
-        function tick() {
-            if (!escaneando) return;
-
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvasScan.width  = video.videoWidth;
-                canvasScan.height = video.videoHeight;
-                const ctx = canvasScan.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvasScan.width, canvasScan.height);
-
-                const imageData = ctx.getImageData(0, 0, canvasScan.width, canvasScan.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: 'dontInvert'
-                });
-
-                if (code && code.data && !qrDetectado) {
-                    const texto = code.data.trim();
-                    if (texto.startsWith('ERP-')) {
-                        qrDetectado = true;
-                        escaneando  = false;
-                        onQRDetectado(texto);
-                        return;
-                    }
-                }
+        // 2. Tomar foto y mandarla a Google
+        function tomarFoto() {
+            // Dibujar el video en un canvas (lienzo)
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // Convertir a texto Base64
+            const fotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // MAGIA: Enviar la foto a la ventana que abrió este pop-up (Tu ERP)
+            if (window.opener) {
+                window.opener.postMessage({ tipo: 'FOTO_KIOSCO_OK', foto: fotoBase64 }, '*');
             }
-            animFrameId = requestAnimationFrame(tick);
-        }
-
-        animFrameId = requestAnimationFrame(tick);
-    }
-
-    // ==========================================
-    // 3. QR DETECTADO
-    // ==========================================
-    function onQRDetectado(codigo) {
-        scanStatus.innerText = '✓ QR detectado — procesando...';
-        scanStatus.classList.add('detectado');
-
-        flash.style.background = 'rgba(34,197,94,0.35)';
-        flash.style.opacity = '1';
-        setTimeout(() => { flash.style.opacity = '0'; }, 300);
-
-        if (window.opener) {
-            window.opener.postMessage({ tipo: 'QR_KIOSCO_OK', codigo: codigo }, '*');
-        }
-
-        // Esperar respuesta del kiosco; si no llega en 3s, volver a escanear
-        setTimeout(() => {
-            if (escaneando) return;
-            scanStatus.innerText = 'Apunta el QR del carnet hacia la cámara';
-            scanStatus.classList.remove('detectado');
-            modoScanner.style.display = 'flex';
-            iniciarEscaneoQR();
-        }, 3000);
-    }
-
-    // ==========================================
-    // 4. TOMAR FOTO AUTOMÁTICA CON COUNTDOWN
-    // ==========================================
-    function iniciarConteoFoto() {
-        let cuenta = 3;
-        countdownEl.innerText = cuenta;
-
-        const interval = setInterval(() => {
-            cuenta--;
-            if (cuenta > 0) {
-                countdownEl.innerText = cuenta;
-            } else {
-                clearInterval(interval);
-                tomarFoto();
+            
+            // Apagar la luz de la cámara y cerrar la ventanita
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
             }
-        }, 1000);
-    }
-
-    function tomarFoto() {
-        const canvas = document.createElement('canvas');
-        canvas.width  = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-
-        if (modoCamara === 'user') {
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
+            window.close();
         }
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const fotoBase64 = canvas.toDataURL('image/jpeg', 0.85);
-
-        // Flash blanco
-        flash.style.background = 'white';
-        flash.style.opacity = '1';
-        setTimeout(() => { flash.style.opacity = '0'; }, 200);
-
-        if (window.opener) {
-            window.opener.postMessage({ tipo: 'FOTO_KIOSCO_OK', foto: fotoBase64 }, '*');
-        }
-
-        // Volver a modo escáner
-        setTimeout(() => {
-            modoFoto.style.display    = 'none';
-            modoScanner.style.display = 'flex';
-            scanStatus.innerText = 'Apunta el QR del carnet hacia la cámara';
-            scanStatus.classList.remove('detectado');
-            escaneando  = true;
-            qrDetectado = false;
-            iniciarEscaneoQR();
-        }, 600);
-    }
-
-    // ==========================================
-    // 5. MENSAJES DEL KIOSCO
-    // ==========================================
-    window.addEventListener('message', function(event) {
-        if (event.origin !== 'https://gestiondigitalzde.github.io') return;
-
-        if (event.data && event.data.tipo === 'SOLICITAR_FOTO') {
-            escaneando = false;
-            if (animFrameId) cancelAnimationFrame(animFrameId);
-            modoScanner.style.display = 'none';
-            modoFoto.style.display    = 'flex';
-            iniciarConteoFoto();
-        }
-
-        if (event.data && event.data.tipo === 'CAMBIAR_CAMARA_SOLICITUD') {
-            cambiarCamara();
-        }
-    });
-
-    // ==========================================
-    // 6. CAMBIAR CÁMARA
-    // ==========================================
-    function cambiarCamara() {
-        modoCamara = modoCamara === 'user' ? 'environment' : 'user';
-        encenderCamara();
-    }
-
-    encenderCamara();
-</script>
+    </script>
 </body>
 </html>
