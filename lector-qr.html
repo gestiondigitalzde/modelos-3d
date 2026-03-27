@@ -78,6 +78,7 @@
             height: clamp(180px, 50vw, 240px);
             z-index: 5;
             pointer-events: none;
+            transition: border-color 0.3s;
         }
 
         .scan-frame::before, .scan-frame::after,
@@ -111,6 +112,13 @@
             border-radius: 0 0 0 4px;
         }
 
+        /* Marco verde cuando detecta QR */
+        .scan-frame.detectado::before,
+        .scan-frame.detectado::after,
+        .scan-frame.detectado .corner {
+            border-color: #22c55e;
+        }
+
         .scan-line {
             position: absolute;
             top: 50%; left: 50%;
@@ -121,6 +129,11 @@
             z-index: 6;
             pointer-events: none;
             animation: scanAnim 2s ease-in-out infinite;
+        }
+
+        .scan-line.pausada {
+            animation: none;
+            opacity: 0;
         }
 
         @keyframes scanAnim {
@@ -143,17 +156,50 @@
             font-weight: 700;
             color: rgba(255,255,255,0.85);
             letter-spacing: 0.5px;
+            transition: all 0.3s;
         }
 
         .scan-status.ok {
             color: #22c55e;
-            font-size: clamp(0.9rem, 3.5vw, 1.1rem);
-            animation: blink 0.4s ease-in-out 3;
+            font-size: clamp(1rem, 4vw, 1.3rem);
         }
 
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.2; }
+        /* CUENTA REGRESIVA */
+        .countdown-overlay {
+            display: none;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 15;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .countdown-overlay.visible {
+            display: flex;
+        }
+
+        .countdown-num {
+            font-size: clamp(4rem, 18vw, 6rem);
+            font-weight: 900;
+            color: white;
+            line-height: 1;
+            text-shadow: 0 0 30px rgba(0,169,224,0.8), 0 0 60px rgba(0,169,224,0.4);
+            animation: countPulse 1s ease-in-out infinite;
+        }
+
+        .countdown-label {
+            font-size: clamp(0.8rem, 3vw, 1rem);
+            font-weight: 700;
+            color: rgba(255,255,255,0.8);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        @keyframes countPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
         }
 
         #error-camara {
@@ -192,6 +238,12 @@
 <canvas id="canvas"></canvas>
 <div id="flash"></div>
 
+<!-- CUENTA REGRESIVA -->
+<div class="countdown-overlay" id="countdown-overlay">
+    <div class="countdown-num" id="countdown-num">3</div>
+    <div class="countdown-label">Mira a la cámara</div>
+</div>
+
 <div class="overlay-top">
     <span class="logo-text">ERP ZÚÑIGA — Lector QR</span>
     <button class="btn-switch" onclick="cambiarCamara()" title="Cambiar cámara">
@@ -201,11 +253,11 @@
     </button>
 </div>
 
-<div class="scan-frame">
+<div class="scan-frame" id="scan-frame">
     <div class="corner tr"></div>
     <div class="corner bl"></div>
 </div>
-<div class="scan-line"></div>
+<div class="scan-line" id="scan-line"></div>
 
 <div class="overlay-bottom">
     <p class="scan-status" id="status-text">
@@ -220,11 +272,15 @@
 </div>
 
 <script>
-    const video      = document.getElementById('video');
-    const canvas     = document.getElementById('canvas');
-    const flash      = document.getElementById('flash');
-    const statusText = document.getElementById('status-text');
-    const errorDiv   = document.getElementById('error-camara');
+    const video           = document.getElementById('video');
+    const canvas          = document.getElementById('canvas');
+    const flash           = document.getElementById('flash');
+    const statusText      = document.getElementById('status-text');
+    const errorDiv        = document.getElementById('error-camara');
+    const scanFrame       = document.getElementById('scan-frame');
+    const scanLine        = document.getElementById('scan-line');
+    const countdownOverlay = document.getElementById('countdown-overlay');
+    const countdownNum    = document.getElementById('countdown-num');
 
     let currentStream = null;
     let modoCamara    = 'environment';
@@ -234,7 +290,7 @@
 
     // 1. ENCENDER CÁMARA
     async function encenderCamara() {
-        if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+        if (currentStream) currentStream.getTracks().forEach(function(t) { t.stop(); });
         errorDiv.style.display = 'none';
 
         try {
@@ -267,9 +323,8 @@
 
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height, {
-    inversionAttempts: 'attemptBoth'
-});
-if (code) console.log('QR detectado:', code.data);
+                    inversionAttempts: 'attemptBoth'
+                });
 
                 if (code && code.data && !qrDetectado) {
                     const texto = code.data.trim();
@@ -287,28 +342,76 @@ if (code) console.log('QR detectado:', code.data);
         animFrameId = requestAnimationFrame(tick);
     }
 
-    // 3. QR DETECTADO
+    // 3. QR DETECTADO → CUENTA REGRESIVA → FOTO
     function onQRDetectado(codigo) {
+        // Marco verde
+        scanFrame.classList.add('detectado');
+        scanLine.classList.add('pausada');
+
         // Flash verde
-        flash.style.background = 'rgba(34,197,94,0.4)';
+        flash.style.background = 'rgba(34,197,94,0.35)';
         flash.style.opacity = '1';
-        setTimeout(() => { flash.style.opacity = '0'; }, 300);
+        setTimeout(function() { flash.style.opacity = '0'; }, 300);
 
-        statusText.innerText = '✓ QR detectado — cerrando...';
+        // Mostrar cuenta regresiva
         statusText.classList.add('ok');
+        countdownOverlay.classList.add('visible');
 
-        // Mandar al ERP y cerrar
-        if (window.opener) {
-            window.opener.postMessage({ tipo: 'QR_KIOSCO_OK', codigo: codigo }, '*');
-        }
+        let cuenta = 3;
+        countdownNum.innerText = cuenta;
+        statusText.innerText = 'Mira a la camara...';
 
-        setTimeout(() => {
-            if (currentStream) currentStream.getTracks().forEach(t => t.stop());
-            window.close();
-        }, 800);
+        var interval = setInterval(function() {
+            cuenta--;
+            if (cuenta > 0) {
+                countdownNum.innerText = cuenta;
+            } else {
+                clearInterval(interval);
+                countdownNum.innerText = '📸';
+                tomarFotoYEnviar(codigo);
+            }
+        }, 1000);
     }
 
-    // 4. CAMBIAR CÁMARA
+    // 4. TOMAR FOTO Y ENVIAR TODO AL ERP
+    function tomarFotoYEnviar(codigo) {
+        var fotoCanvas = document.createElement('canvas');
+        fotoCanvas.width  = video.videoWidth;
+        fotoCanvas.height = video.videoHeight;
+        var ctx = fotoCanvas.getContext('2d');
+
+        if (modoCamara === 'user') {
+            ctx.translate(fotoCanvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+
+        ctx.drawImage(video, 0, 0, fotoCanvas.width, fotoCanvas.height);
+        var fotoBase64 = fotoCanvas.toDataURL('image/jpeg', 0.85);
+
+        // Flash blanco al tomar foto
+        flash.style.background = 'white';
+        flash.style.opacity = '1';
+        setTimeout(function() { flash.style.opacity = '0'; }, 200);
+
+        // Mandar foto + código juntos al ERP
+        if (window.opener) {
+            window.opener.postMessage({ 
+                tipo: 'QR_Y_FOTO_OK', 
+                codigo: codigo,
+                foto: fotoBase64
+            }, '*');
+        }
+
+        statusText.innerText = 'Registro procesando...';
+
+        // Cerrar ventana
+        setTimeout(function() {
+            if (currentStream) currentStream.getTracks().forEach(function(t) { t.stop(); });
+            window.close();
+        }, 700);
+    }
+
+    // 5. CAMBIAR CÁMARA
     function cambiarCamara() {
         modoCamara = modoCamara === 'user' ? 'environment' : 'user';
         encenderCamara();
