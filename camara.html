@@ -2,101 +2,95 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cámara - ERP Zúñiga</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body { 
+
+        html, body {
+            width: 100%; height: 100%;
             background: #0a0a0a;
             color: white;
             font-family: Arial, sans-serif;
-            height: 100vh;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
         }
 
         #video {
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             object-fit: cover;
             position: absolute;
             top: 0; left: 0;
             z-index: 1;
         }
 
-        canvas#canvas-scan {
-            display: none;
+        canvas#canvas-scan { display: none; }
+
+        #flash {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            z-index: 20;
+            pointer-events: none;
+            transition: opacity 0.1s;
         }
 
-        /* OVERLAY SUPERIOR */
+        /* ── OVERLAY SUPERIOR ── */
         .overlay-top {
             position: absolute;
             top: 0; left: 0; right: 0;
             z-index: 10;
-            padding: 12px 16px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            padding: 14px 18px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
         .logo-text {
-            font-size: 0.85rem;
+            font-size: clamp(0.75rem, 3vw, 0.95rem);
             font-weight: 800;
             color: #00a9e0;
             letter-spacing: 1px;
         }
 
         .btn-switch {
-            width: 40px; height: 40px;
+            width: clamp(38px, 8vw, 46px);
+            height: clamp(38px, 8vw, 46px);
             border-radius: 50%;
             border: 1.5px solid rgba(255,255,255,0.4);
-            background: rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.4);
             color: white;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            transition: background 0.2s;
+            touch-action: manipulation;
         }
+        .btn-switch:active { background: rgba(0,169,224,0.4); }
 
-        /* OVERLAY INFERIOR */
-        .overlay-bottom {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            z-index: 10;
-            padding: 20px 16px 30px;
-            background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
-            text-align: center;
-        }
-
-        /* MODO ESCÁNER */
-        #modo-scanner {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-
+        /* ── MARCO ESCÁNER ── */
         .scan-frame {
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -60%);
-            width: 200px;
-            height: 200px;
+            transform: translate(-50%, -58%);
+            width: clamp(160px, 45vw, 220px);
+            height: clamp(160px, 45vw, 220px);
             z-index: 5;
+            pointer-events: none;
         }
 
         .scan-frame::before,
-        .scan-frame::after {
+        .scan-frame::after,
+        .scan-frame-corner {
             content: '';
             position: absolute;
-            width: 35px;
-            height: 35px;
+            width: clamp(28px, 8vw, 38px);
+            height: clamp(28px, 8vw, 38px);
             border-color: #00a9e0;
             border-style: solid;
         }
@@ -110,11 +104,10 @@
             border-width: 0 3px 3px 0;
             border-radius: 0 0 4px 0;
         }
-
         .scan-frame-corner {
             position: absolute;
-            width: 35px;
-            height: 35px;
+            width: clamp(28px, 8vw, 38px);
+            height: clamp(28px, 8vw, 38px);
             border-color: #00a9e0;
             border-style: solid;
         }
@@ -131,77 +124,85 @@
 
         .scan-line {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -60%);
-            width: 200px;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -58%);
+            width: clamp(160px, 45vw, 220px);
             height: 2px;
             background: linear-gradient(to right, transparent, #00a9e0, transparent);
             z-index: 6;
+            pointer-events: none;
             animation: scanAnim 2s ease-in-out infinite;
         }
 
         @keyframes scanAnim {
-            0% { margin-top: -100px; opacity: 1; }
-            50% { margin-top: 100px; opacity: 1; }
-            100% { margin-top: -100px; opacity: 1; }
+            0%   { margin-top: calc(clamp(160px, 45vw, 220px) / -2); opacity: 1; }
+            50%  { margin-top: calc(clamp(160px, 45vw, 220px) / 2);  opacity: 1; }
+            100% { margin-top: calc(clamp(160px, 45vw, 220px) / -2); opacity: 1; }
+        }
+
+        /* ── OVERLAY INFERIOR ── */
+        .overlay-bottom {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            z-index: 10;
+            padding: clamp(14px, 4vw, 24px) clamp(14px, 4vw, 20px) clamp(20px, 5vw, 36px);
+            background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+            text-align: center;
+        }
+
+        /* MODO ESCÁNER */
+        #modo-scanner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
         }
 
         .scan-status {
-            font-size: 0.85rem;
+            font-size: clamp(0.75rem, 3vw, 0.9rem);
             font-weight: 700;
             color: rgba(255,255,255,0.8);
             letter-spacing: 0.5px;
         }
-
         .scan-status.detectado {
             color: #22c55e;
-            animation: pulse 0.5s ease-in-out 3;
+            animation: blink 0.5s ease-in-out 3;
         }
-
-        @keyframes pulse {
+        @keyframes blink {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+            50% { opacity: 0.2; }
         }
 
-        /* MODO FOTO */
+        /* MODO FOTO - countdown */
         #modo-foto {
             display: none;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
-
-        .btn-capturar {
-            width: 72px; height: 72px;
-            border-radius: 50%;
-            border: 5px solid white;
-            background: #00a9e0;
-            cursor: pointer;
-            box-shadow: 0 0 20px rgba(0,169,224,0.5);
-            transition: transform 0.15s;
-        }
-        .btn-capturar:active { transform: scale(0.88); }
 
         .foto-label {
-            font-size: 0.8rem;
-            font-weight: 700;
-            color: rgba(255,255,255,0.7);
-            letter-spacing: 0.5px;
+            font-size: clamp(0.75rem, 3vw, 0.9rem);
+            font-weight: 800;
+            color: white;
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
 
-        /* FLASH al capturar */
-        #flash {
-            position: absolute;
-            inset: 0;
-            background: white;
-            opacity: 0;
-            z-index: 20;
-            pointer-events: none;
-            transition: opacity 0.1s;
+        .countdown {
+            font-size: clamp(2rem, 10vw, 3.5rem);
+            font-weight: 900;
+            color: #00a9e0;
+            line-height: 1;
+            text-shadow: 0 0 20px rgba(0,169,224,0.6);
+            animation: countPulse 1s ease-in-out infinite;
+        }
+        @keyframes countPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
 
-        /* ERROR */
+        /* ── ERROR ── */
         #error-camara {
             display: none;
             position: absolute;
@@ -211,20 +212,23 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 12px;
+            gap: 14px;
             text-align: center;
-            padding: 24px;
+            padding: 28px;
         }
-
-        #error-camara i {
-            font-size: 3rem;
-            color: #ef4444;
-        }
-
         #error-camara p {
-            font-size: 0.9rem;
+            font-size: clamp(0.85rem, 3.5vw, 1rem);
             color: rgba(255,255,255,0.7);
-            line-height: 1.5;
+            line-height: 1.6;
+        }
+
+        /* ── RESPONSIVE TABLET / LANDSCAPE ── */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .scan-frame, .scan-line {
+                top: 50%;
+                transform: translate(-50%, -50%);
+            }
+            .scan-line { margin-top: 0; }
         }
     </style>
 </head>
@@ -238,13 +242,13 @@
 <div class="overlay-top">
     <span class="logo-text">ERP ZÚÑIGA</span>
     <button class="btn-switch" onclick="cambiarCamara()" title="Cambiar cámara">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-            <path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+            <path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
         </svg>
     </button>
 </div>
 
-<!-- MARCO ESCÁNER QR -->
+<!-- MARCO QR -->
 <div class="scan-frame">
     <div class="scan-frame-corner tr"></div>
     <div class="scan-frame-corner bl"></div>
@@ -254,23 +258,25 @@
 <!-- OVERLAY INFERIOR -->
 <div class="overlay-bottom">
 
-    <!-- MODO ESCÁNER (default) -->
     <div id="modo-scanner">
-        <p class="scan-status" id="scan-status-text">Apunta el QR del carnet hacia la cámara</p>
+        <p class="scan-status" id="scan-status-text">
+            Apunta el QR del carnet hacia la cámara
+        </p>
     </div>
 
-    <!-- MODO FOTO (cuando el kiosco lo pide) -->
     <div id="modo-foto">
-        <p class="foto-label">MIRA A LA CÁMARA Y PRESIONA</p>
-        <button class="btn-capturar" onclick="tomarFoto()"></button>
+        <p class="foto-label">Mira a la cámara</p>
+        <div class="countdown" id="countdown-num">3</div>
     </div>
 
 </div>
 
-<!-- ERROR -->
 <div id="error-camara">
-    <p style="font-size:2rem;">📷</p>
-    <p>No se pudo acceder a la cámara.<br>Por favor permite el acceso en tu navegador.</p>
+    <p style="font-size:2.5rem;">📷</p>
+    <p>No se pudo acceder a la cámara.<br>Permite el acceso en tu navegador e intenta de nuevo.</p>
+    <button onclick="encenderCamara()" style="margin-top:12px; padding:10px 24px; border-radius:20px; border:none; background:#00a9e0; color:white; font-weight:800; cursor:pointer;">
+        Reintentar
+    </button>
 </div>
 
 <script>
@@ -281,12 +287,13 @@
     const modoFoto    = document.getElementById('modo-foto');
     const scanStatus  = document.getElementById('scan-status-text');
     const errorDiv    = document.getElementById('error-camara');
+    const countdownEl = document.getElementById('countdown-num');
 
-    let currentStream  = null;
-    let modoCamara     = 'environment'; // trasera por defecto en kiosco
-    let escaneando     = true;
-    let qrDetectado    = false;
-    let animFrameId    = null;
+    let currentStream = null;
+    let modoCamara    = 'environment';
+    let escaneando    = true;
+    let qrDetectado   = false;
+    let animFrameId   = null;
 
     // ==========================================
     // 1. ENCENDER CÁMARA
@@ -295,17 +302,18 @@
         if (currentStream) {
             currentStream.getTracks().forEach(t => t.stop());
         }
+        errorDiv.style.display = 'none';
 
         try {
             currentStream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: modoCamara,
-                    width: { ideal: 1280 },
+                    width:  { ideal: 1280 },
                     height: { ideal: 720 }
                 }
             });
             video.srcObject = currentStream;
-            errorDiv.style.display = 'none';
+            await video.play();
             iniciarEscaneoQR();
         } catch(err) {
             console.error('Error cámara:', err);
@@ -317,7 +325,8 @@
     // 2. ESCANEO CONTINUO DE QR
     // ==========================================
     function iniciarEscaneoQR() {
-        escaneando = true;
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        escaneando  = true;
         qrDetectado = false;
 
         function tick() {
@@ -338,13 +347,12 @@
                     const texto = code.data.trim();
                     if (texto.startsWith('ERP-')) {
                         qrDetectado = true;
-                        escaneando = false;
+                        escaneando  = false;
                         onQRDetectado(texto);
                         return;
                     }
                 }
             }
-
             animFrameId = requestAnimationFrame(tick);
         }
 
@@ -352,90 +360,97 @@
     }
 
     // ==========================================
-    // 3. QR DETECTADO → AVISAR AL KIOSCO
+    // 3. QR DETECTADO
     // ==========================================
     function onQRDetectado(codigo) {
-        scanStatus.innerText = '✓ QR detectado';
+        scanStatus.innerText = '✓ QR detectado — procesando...';
         scanStatus.classList.add('detectado');
 
-        // Flash verde visual
-        flash.style.background = 'rgba(34, 197, 94, 0.3)';
+        flash.style.background = 'rgba(34,197,94,0.35)';
         flash.style.opacity = '1';
         setTimeout(() => { flash.style.opacity = '0'; }, 300);
 
-        // Mandar al kiosco
         if (window.opener) {
-            window.opener.postMessage({ 
-                tipo: 'QR_KIOSCO_OK', 
-                codigo: codigo 
-            }, '*');
+            window.opener.postMessage({ tipo: 'QR_KIOSCO_OK', codigo: codigo }, '*');
         }
 
-        // Volver a escanear después de 2 segundos por si el kiosco no lo procesó
+        // Esperar respuesta del kiosco; si no llega en 3s, volver a escanear
         setTimeout(() => {
+            if (escaneando) return;
             scanStatus.innerText = 'Apunta el QR del carnet hacia la cámara';
             scanStatus.classList.remove('detectado');
-            qrDetectado = false;
-            escaneando = true;
+            modoScanner.style.display = 'flex';
             iniciarEscaneoQR();
-        }, 2500);
+        }, 3000);
     }
 
     // ==========================================
-    // 4. TOMAR FOTO (cuando el kiosco lo pide)
+    // 4. TOMAR FOTO AUTOMÁTICA CON COUNTDOWN
     // ==========================================
+    function iniciarConteoFoto() {
+        let cuenta = 3;
+        countdownEl.innerText = cuenta;
+
+        const interval = setInterval(() => {
+            cuenta--;
+            if (cuenta > 0) {
+                countdownEl.innerText = cuenta;
+            } else {
+                clearInterval(interval);
+                tomarFoto();
+            }
+        }, 1000);
+    }
+
     function tomarFoto() {
         const canvas = document.createElement('canvas');
         canvas.width  = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
 
-        // Espejo solo en cámara frontal
         if (modoCamara === 'user') {
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
         }
 
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const fotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        const fotoBase64 = canvas.toDataURL('image/jpeg', 0.85);
 
         // Flash blanco
         flash.style.background = 'white';
         flash.style.opacity = '1';
         setTimeout(() => { flash.style.opacity = '0'; }, 200);
 
-        // Mandar foto al kiosco
         if (window.opener) {
-            window.opener.postMessage({ 
-                tipo: 'FOTO_KIOSCO_OK', 
-                foto: fotoBase64 
-            }, '*');
+            window.opener.postMessage({ tipo: 'FOTO_KIOSCO_OK', foto: fotoBase64 }, '*');
         }
 
         // Volver a modo escáner
         setTimeout(() => {
             modoFoto.style.display    = 'none';
             modoScanner.style.display = 'flex';
-            escaneando = true;
+            scanStatus.innerText = 'Apunta el QR del carnet hacia la cámara';
+            scanStatus.classList.remove('detectado');
+            escaneando  = true;
             qrDetectado = false;
             iniciarEscaneoQR();
-        }, 500);
+        }, 600);
     }
 
     // ==========================================
-    // 5. ESCUCHAR MENSAJES DEL KIOSCO
+    // 5. MENSAJES DEL KIOSCO
     // ==========================================
     window.addEventListener('message', function(event) {
-        // Solicitud de foto
+        if (event.origin !== 'https://gestiondigitalzde.github.io') return;
+
         if (event.data && event.data.tipo === 'SOLICITAR_FOTO') {
             escaneando = false;
             if (animFrameId) cancelAnimationFrame(animFrameId);
-
             modoScanner.style.display = 'none';
             modoFoto.style.display    = 'flex';
+            iniciarConteoFoto();
         }
 
-        // Cambiar cámara desde el kiosco
         if (event.data && event.data.tipo === 'CAMBIAR_CAMARA_SOLICITUD') {
             cambiarCamara();
         }
@@ -449,7 +464,6 @@
         encenderCamara();
     }
 
-    // Iniciar
     encenderCamara();
 </script>
 </body>
