@@ -340,42 +340,60 @@
 
     // 3. QR DETECTADO → ENVIAR CÓDIGO YA + CUENTA REGRESIVA DE 2 SEG
     function onQRDetectado(codigo) {
-        // Marco verde
-        scanFrame.classList.add('detectado');
-        scanLine.classList.add('pausada');
+    // Leer contexto de la URL
+    const contexto = new URLSearchParams(window.location.search).get('contexto') || 'kiosco';
+    const tipoMensaje = contexto === 'taller' ? 'QR_TALLER_IDENTIFICACION' : 'QR_VALIDAR_YA';
 
-        // Flash verde
-        flash.style.background = 'rgba(34,197,94,0.35)';
-        flash.style.opacity = '1';
-        setTimeout(function() { flash.style.opacity = '0'; }, 300);
+    scanFrame.classList.add('detectado');
+    scanLine.classList.add('pausada');
 
-        // *** ENVIAR CÓDIGO AL ERP INMEDIATAMENTE para validar en paralelo ***
+    flash.style.background = 'rgba(34,197,94,0.35)';
+    flash.style.opacity = '1';
+    setTimeout(function() { flash.style.opacity = '0'; }, 300);
+
+    // Si es taller → solo manda el código y cierra, sin foto
+    if (contexto === 'taller') {
         if (window.opener) {
             window.opener.postMessage({ 
-                tipo: 'QR_VALIDAR_YA', 
+                tipo: 'QR_TALLER_IDENTIFICACION', 
                 codigo: codigo 
             }, '*');
         }
-
-        // Mostrar cuenta regresiva de 2 seg
-        countdownOverlay.classList.add('visible');
+        statusText.innerText = 'QR reconocido';
         statusText.classList.add('ok');
-        statusText.innerText = 'Mira a la camara...';
-
-        var cuenta = 2;
-        countdownNum.innerText = cuenta;
-
-        var interval = setInterval(function() {
-            cuenta--;
-            if (cuenta > 0) {
-                countdownNum.innerText = cuenta;
-            } else {
-                clearInterval(interval);
-                countdownNum.innerText = '📸';
-                tomarFotoYEnviar();
-            }
-        }, 1000);
+        setTimeout(function() {
+            if (currentStream) currentStream.getTracks().forEach(function(t) { t.stop(); });
+            window.close();
+        }, 600);
+        return;
     }
+
+    // Si es kiosco → flujo normal con foto
+    if (window.opener) {
+        window.opener.postMessage({ 
+            tipo: 'QR_VALIDAR_YA', 
+            codigo: codigo 
+        }, '*');
+    }
+
+    countdownOverlay.classList.add('visible');
+    statusText.classList.add('ok');
+    statusText.innerText = 'Mira a la camara...';
+
+    var cuenta = 2;
+    countdownNum.innerText = cuenta;
+
+    var interval = setInterval(function() {
+        cuenta--;
+        if (cuenta > 0) {
+            countdownNum.innerText = cuenta;
+        } else {
+            clearInterval(interval);
+            countdownNum.innerText = '📸';
+            tomarFotoYEnviar();
+        }
+    }, 1000);
+}
 
     // 4. TOMAR FOTO Y ENVIAR AL ERP
     function tomarFotoYEnviar() {
