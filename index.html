@@ -275,7 +275,7 @@ async function imprimirBluetooth() {
     await enviarTrabajoBLE(writeChar);
 
     msg.style.color = "#1e7e34";
-    msg.innerText = "¡Etiqueta impresa con éxito!";
+    msg.innerText = "¡Etiqueta enviada a impresión!";
   } catch (err) {
     msg.style.color = "#dc3545";
     msg.innerText = "Fallo Bluetooth: " + err.message;
@@ -292,6 +292,7 @@ async function enviarTrabajoBLE(char) {
 
   const umbral = 160;
 
+  // 1. Convertir la imagen del canvas a un mapa de bits en blanco y negro puro
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
@@ -302,18 +303,32 @@ async function enviarTrabajoBLE(char) {
     }
   }
 
+  // 2. SECUENCIA DE INICIALIZACIÓN NIIMBOT
+  // Iniciar documento (0x01)
   await char.writeValue(empaquetarNiimbot(0x01, [0x01]));
-  await char.writeValue(empaquetarNiimbot(0x02, [0x01]));
-  await char.writeValue(empaquetarNiimbot(0x03, [0x00, 0x01]));
+  // Setear densidad de impresión (0x21) - Opcional pero recomendado (0x01 = normal)
+  await char.writeValue(empaquetarNiimbot(0x21, [0x01]));
+  // Setear tipo de papel (0x23) - 0x01 = Papel con espacios (gap)
+  await char.writeValue(empaquetarNiimbot(0x23, [0x01]));
+  // Iniciar página (0x03)
+  await char.writeValue(empaquetarNiimbot(0x03, [0x01]));
 
+  // 3. ENVIAR LOS DATOS DE LA IMAGEN LÍNEA POR LÍNEA
   for (let line = 0; line < h; line++) {
     const start = line * bytesPerLine;
     const slice = Array.from(bitmap.slice(start, start + bytesPerLine));
+    // El comando 0x85 es para enviar datos de imagen.
     const payload = [(line >> 8) & 0xff, line & 0xff, ...slice];
     await char.writeValue(empaquetarNiimbot(0x85, payload));
   }
 
-  await char.writeValue(empaquetarNiimbot(0xf3, [0x01]));
+  // 4. SECUENCIA DE FINALIZACIÓN Y CORTE
+  // Finalizar página (0xE3)
+  await char.writeValue(empaquetarNiimbot(0xE3, [0x01]));
+  // Imprimir y avanzar papel (0xF3)
+  await char.writeValue(empaquetarNiimbot(0xF3, [0x01]));
+  // Finalizar documento (0x0F)
+  await char.writeValue(empaquetarNiimbot(0x0F, [0x01]));
 }
 </script>
 
