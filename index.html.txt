@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Etiquetas Niimbot B1 - Zúñiga</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background: #f0f2f5; margin: 0; }
+    .card { background: #fff; max-width: 440px; margin: 0 auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 18px; }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 4px; color: #222; }
+    input { width: 100%; padding: 10px; box-sizing: border-box; border: 2px solid #bbb; border-radius: 6px; font-size: 15px; font-weight: 600; }
+    .canvas-container { margin: 15px 0; text-align: center; background: #eee; padding: 10px; border-radius: 8px; }
+    canvas { border: 2px solid #000; background: #fff; max-width: 100%; height: auto; display: inline-block; }
+    .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+    button { padding: 12px; border: none; border-radius: 6px; font-weight: 800; cursor: pointer; font-size: 14px; }
+    .btn-gray { background: #212529; color: white; width: 100%; margin-top: 5px; }
+    .btn-blue { background: #0056b3; color: white; flex: 1; }
+    .btn-green { background: #1e7e34; color: white; flex: 1; }
+    #msg { font-size: 13px; margin-top: 12px; text-align: center; font-weight: 700; min-height: 20px; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h3 style="margin-top:0; text-align:center;">Impresión Niimbot B1 (50x30 mm)</h3>
+  
+  <div class="form-group">
+    <label>Número de ODS (id_ods):</label>
+    <input type="text" id="inputOds" placeholder="Ej: 20261102112538">
+  </div>
+  
+  <div class="form-group">
+    <label>ID del Artículo (id_art / C.OP):</label>
+    <input type="text" id="inputCop" placeholder="Ej: 1330">
+  </div>
+
+  <button class="btn-gray" onclick="consultarDatos()">🔍 Consultar y Cargar Etiqueta</button>
+
+  <div class="canvas-container">
+    <canvas id="labelCanvas" width="384" height="240"></canvas>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-green" onclick="imprimirUSB()">🔌 Imprimir USB (Cable)</button>
+    <button class="btn-blue" onclick="imprimirBluetooth()">📱 Imprimir Bluetooth</button>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<div id="qrContainer" style="display:none;"></div>
+
+<script>
+// AQUÍ DEBES PEGAR LA URL DE TU APLICACIÓN WEB DE APPS SCRIPT (la que termina en /exec)
+const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyi7rPi2UHOoHNelQyo0RBiu8S9SMcrcobjq8Fh4pxSq7_3HmtMnolCE0537LgRLgGtRQ/exec";
+
+const ICO_MUEBLE = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3a4 4 0 0 0-4 4v5a1 1 0 0 0 1 1h1v2a1 1 0 0 0 2 0v-2h16v2a1 1 0 0 0 2 0v-2h1a1 1 0 0 0 1-1v-5a4 4 0 0 0-4-4zm-14-3h12v3h-1.1a3 3 0 0 0-5.8 0H8.9a3 3 0 0 0-5.8 0H6V6zm16 11H2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4z'/></svg>";
+const ICO_MAPA = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M12 1C7.6 1 4 4.6 4 9c0 5.8 8 14 8 14s8-8.2 8-14c0-4.4-3.6-8-8-8zm0 11.5c-1.9 0-3.5-1.6-3.5-3.5S10.1 5.5 12 5.5s3.5 1.6 3.5 3.5-1.6 3.5-3.5 3.5z'/></svg>";
+const ICO_CAL = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M19 3h-1V1h-3v2H9V1H6v2H5c-1.1 0-2 .9-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5c0-1.1-.9-2-2-2zm0 18H5V8h14v13zM7 10h4v4H7v-4zm6 0h4v4h-4v-4z'/></svg>";
+
+function cargarImagen(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.src = src;
+  });
+}
+
+function generarQRDataUrl(texto) {
+  return new Promise((resolve) => {
+    const cont = document.getElementById('qrContainer');
+    cont.innerHTML = "";
+    // Tamaño 123x123 genera exactamente un múltiplo de 3 píxeles por módulo, haciéndolo 100% nítido
+    new QRCode(cont, {
+      text: texto,
+      width: 123,
+      height: 123,
+      correctLevel: QRCode.CorrectLevel.L
+    });
+
+    setTimeout(() => {
+      const qrCanvas = cont.querySelector('canvas');
+      if (qrCanvas) {
+        const qCtx = qrCanvas.getContext('2d');
+        const qImg = qCtx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+        for (let i = 0; i < qImg.data.length; i += 4) {
+          const lum = (qImg.data[i] + qImg.data[i+1] + qImg.data[i+2]) / 3;
+          const col = lum < 140 ? 0 : 255;
+          qImg.data[i] = col;
+          qImg.data[i+1] = col;
+          qImg.data[i+2] = col;
+        }
+        qCtx.putImageData(qImg, 0, 0);
+        resolve(qrCanvas.toDataURL('image/png'));
+      } else {
+        const img = cont.querySelector('img');
+        resolve(img ? img.src : "");
+      }
+    }, 70);
+  });
+}
+
+async function renderizarEtiqueta(d) {
+  const canvas = document.getElementById('labelCanvas');
+  const ctx = canvas.getContext('2d');
+
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 1. QR generado localmente con tu enlace seguro y un tamaño robusto (123 px)
+  const enlaceDirecto = URL_APPS_SCRIPT + "?ver_art=" + encodeURIComponent(d.cop);
+  const qrUrl = await generarQRDataUrl(enlaceDirecto);
+  const imgQR = await cargarImagen(qrUrl);
+  ctx.drawImage(imgQR, 8, 8, 123, 123);
+
+  // 2. Cabecera movida a la derecha del QR gigante
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'left';
+
+  ctx.font = '900 22px Arial, Helvetica, sans-serif';
+  ctx.fillText('ODS', 140, 32);
+
+  ctx.font = '900 19px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.ods, 140, 64);
+
+  ctx.font = '900 18px Arial, Helvetica, sans-serif';
+  ctx.fillText('C.OP: ' + d.cop, 140, 96);
+
+  // Línea
+  ctx.fillRect(8, 138, 368, 2);
+
+  // 3. Iconos y textos reacomodados para que respiren perfecto
+  const [ico1, ico2, ico3] = await Promise.all([
+    cargarImagen(ICO_MUEBLE),
+    cargarImagen(ICO_MAPA),
+    cargarImagen(ICO_CAL)
+  ]);
+
+  ctx.drawImage(ico1, 8, 144, 28, 28);
+  ctx.font = '900 19px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.nombreArticulo.substring(0, 24), 44, 165);
+
+  ctx.drawImage(ico2, 8, 178, 28, 28);
+  ctx.font = '900 19px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.locacion.substring(0, 24), 44, 199);
+
+  ctx.drawImage(ico3, 8, 212, 28, 28);
+  ctx.font = '900 19px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.fechaEvento, 44, 233);
+}
+
+function consultarDatos() {
+  const ods = document.getElementById('inputOds').value.trim();
+  const cop = document.getElementById('inputCop').value.trim();
+  const msg = document.getElementById('msg');
+
+  if (!ods || !cop) {
+    alert("Ingresa tanto el número de ODS como el C.OP.");
+    return;
+  }
+
+  msg.style.color = "#0056b3";
+  msg.innerText = "Consultando y armando etiqueta...";
+
+  if (typeof google === 'undefined' || typeof google.script === 'undefined') {
+     const url = `${URL_APPS_SCRIPT}?action=getDatos&ods=${encodeURIComponent(ods)}&cop=${encodeURIComponent(cop)}`;
+     fetch(url)
+      .then(res => res.json())
+      .then(async json => {
+        if (json.success) {
+          msg.style.color = "#1e7e34";
+          msg.innerText = "¡Etiqueta lista!";
+          await renderizarEtiqueta(json.data);
+        } else {
+          msg.style.color = "#dc3545";
+          msg.innerText = "Error: " + json.error;
+        }
+      })
+      .catch(err => {
+        msg.style.color = "#dc3545";
+        msg.innerText = "Error de conexión: " + err.message;
+      });
+  } else {
+    google.script.run
+      .withSuccessHandler(async function(data) {
+        msg.style.color = "#1e7e34";
+        msg.innerText = "¡Etiqueta lista!";
+        await renderizarEtiqueta(data);
+      })
+      .withFailureHandler(function(err) {
+        msg.style.color = "#dc3545";
+        msg.innerText = "Error: " + err.message;
+      })
+      .obtenerDatosEtiqueta(ods, cop);
+  }
+}
+
+function imprimirUSB() {
+  const canvas = document.getElementById('labelCanvas');
+  const win = window.open('', '_blank', 'width=450,height=300');
+  win.document.write(`
+    <html>
+      <head>
+        <title>Imprimir Niimbot B1</title>
+        <style>
+          @page { size: 50mm 30mm; margin: 0; }
+          body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background: #fff; }
+          img { 
+            width: 50mm; 
+            height: 30mm; 
+            image-rendering: pixelated; 
+          }
+        </style>
+      </head>
+      <body onload="window.print(); window.close();">
+        <img src="${canvas.toDataURL('image/png')}" />
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function empaquetarNiimbot(cmd, payload = []) {
+  const p = [cmd, payload.length, ...payload];
+  let check = 0;
+  for (let b of p) check ^= b;
+  return new Uint8Array([0x55, 0x55, ...p, check, 0xaa, 0xaa]);
+}
+
+async function imprimirBluetooth() {
+  const msg = document.getElementById('msg');
+  try {
+    if (!navigator.bluetooth) {
+      alert("Requiere un navegador compatible con Bluetooth (Chrome para Android).");
+      return;
+    }
+
+    msg.style.color = "#0056b3";
+    msg.innerText = "Buscando Niimbot B1...";
+
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [
+        "0000fee7-0000-1000-8000-00805f9b34fb",
+        "0000e7fe-0000-1000-8000-00805f9b34fb"
+      ]
+    });
+
+    msg.innerText = "Conectando...";
+    const server = await device.gatt.connect();
+    
+    let service;
+    try {
+      service = await server.getPrimaryService("0000fee7-0000-1000-8000-00805f9b34fb");
+    } catch (e) {
+      service = await server.getPrimaryService("0000e7fe-0000-1000-8000-00805f9b34fb");
+    }
+
+    const characteristics = await service.getCharacteristics();
+    const writeChar = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
+
+    if (!writeChar) throw new Error("Canal de escritura no disponible.");
+
+    msg.innerText = "Imprimiendo...";
+    await enviarTrabajoBLE(writeChar);
+
+    msg.style.color = "#1e7e34";
+    msg.innerText = "¡Etiqueta impresa con éxito!";
+  } catch (err) {
+    msg.style.color = "#dc3545";
+    msg.innerText = "Fallo Bluetooth: " + err.message;
+  }
+}
+
+async function enviarTrabajoBLE(char) {
+  const canvas = document.getElementById('labelCanvas');
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const w = canvas.width, h = canvas.height;
+  const bytesPerLine = w / 8;
+  const bitmap = new Uint8Array(bytesPerLine * h);
+
+  const umbral = 160;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const brillo = (imgData.data[i] + imgData.data[i + 1] + imgData.data[i + 2]) / 3;
+      if (brillo < umbral) {
+        bitmap[y * bytesPerLine + (x >> 3)] |= (1 << (7 - (x % 8)));
+      }
+    }
+  }
+
+  await char.writeValue(empaquetarNiimbot(0x01, [0x01]));
+  await char.writeValue(empaquetarNiimbot(0x02, [0x01]));
+  await char.writeValue(empaquetarNiimbot(0x03, [0x00, 0x01]));
+
+  for (let line = 0; line < h; line++) {
+    const start = line * bytesPerLine;
+    const slice = Array.from(bitmap.slice(start, start + bytesPerLine));
+    const payload = [(line >> 8) & 0xff, line & 0xff, ...slice];
+    await char.writeValue(empaquetarNiimbot(0x85, payload));
+  }
+
+  await char.writeValue(empaquetarNiimbot(0xf3, [0x01]));
+}
+</script>
+
+</body>
+</html>
