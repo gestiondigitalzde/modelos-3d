@@ -53,7 +53,7 @@
 <div id="qrContainer" style="display:none;"></div>
 
 <script>
-// AQUÍ DEBES PEGAR LA URL DE TU APLICACIÓN WEB DE APPS SCRIPT (la que termina en /exec)
+// Tu URL real de Apps Script
 const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyi7rPi2UHOoHNelQyo0RBiu8S9SMcrcobjq8Fh4pxSq7_3HmtMnolCE0537LgRLgGtRQ/exec";
 
 const ICO_MUEBLE = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3a4 4 0 0 0-4 4v5a1 1 0 0 0 1 1h1v2a1 1 0 0 0 2 0v-2h16v2a1 1 0 0 0 2 0v-2h1a1 1 0 0 0 1-1v-5a4 4 0 0 0-4-4zm-14-3h12v3h-1.1a3 3 0 0 0-5.8 0H8.9a3 3 0 0 0-5.8 0H6V6zm16 11H2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4z'/></svg>";
@@ -72,7 +72,7 @@ function generarQRDataUrl(texto) {
   return new Promise((resolve) => {
     const cont = document.getElementById('qrContainer');
     cont.innerHTML = "";
-    // Tamaño 123x123 genera exactamente un múltiplo de 3 píxeles por módulo, haciéndolo 100% nítido
+    // Tamaño exacto para nitidez térmica
     new QRCode(cont, {
       text: texto,
       width: 123,
@@ -110,13 +110,11 @@ async function renderizarEtiqueta(d) {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 1. QR generado localmente con tu enlace seguro y un tamaño robusto (123 px)
   const enlaceDirecto = URL_APPS_SCRIPT + "?ver_art=" + encodeURIComponent(d.cop);
   const qrUrl = await generarQRDataUrl(enlaceDirecto);
   const imgQR = await cargarImagen(qrUrl);
   ctx.drawImage(imgQR, 8, 8, 123, 123);
 
-  // 2. Cabecera movida a la derecha del QR gigante
   ctx.fillStyle = '#000000';
   ctx.textAlign = 'left';
 
@@ -129,10 +127,8 @@ async function renderizarEtiqueta(d) {
   ctx.font = '900 18px Arial, Helvetica, sans-serif';
   ctx.fillText('C.OP: ' + d.cop, 140, 96);
 
-  // Línea
   ctx.fillRect(8, 138, 368, 2);
 
-  // 3. Iconos y textos reacomodados para que respiren perfecto
   const [ico1, ico2, ico3] = await Promise.all([
     cargarImagen(ICO_MUEBLE),
     cargarImagen(ICO_MAPA),
@@ -241,23 +237,34 @@ async function imprimirBluetooth() {
     msg.style.color = "#0056b3";
     msg.innerText = "Buscando Niimbot B1...";
 
+    // Lista maestra de canales UUID para todas las versiones de Niimbot B1
+    const serviciosNiimbot = [
+      "0000e7ce-0000-1000-8000-00805f9b34fb", 
+      "0000e7fe-0000-1000-8000-00805f9b34fb", 
+      "0000fee7-0000-1000-8000-00805f9b34fb", 
+      "49535343-fe7d-4ae5-8fa9-9fafd205e455"  
+    ];
+
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
-      optionalServices: [
-        "0000fee7-0000-1000-8000-00805f9b34fb",
-        "0000e7fe-0000-1000-8000-00805f9b34fb"
-      ]
+      optionalServices: serviciosNiimbot
     });
 
-    msg.innerText = "Conectando...";
+    msg.innerText = "Conectando a la impresora...";
     const server = await device.gatt.connect();
     
-    let service;
-    try {
-      service = await server.getPrimaryService("0000fee7-0000-1000-8000-00805f9b34fb");
-    } catch (e) {
-      service = await server.getPrimaryService("0000e7fe-0000-1000-8000-00805f9b34fb");
+    // Barrido automático para encontrar el canal correcto
+    let service = null;
+    for (let uuid of serviciosNiimbot) {
+      try {
+        service = await server.getPrimaryService(uuid);
+        if (service) break;
+      } catch (e) {
+        // Continúa buscando
+      }
     }
+
+    if (!service) throw new Error("No se encontró un canal Bluetooth compatible.");
 
     const characteristics = await service.getCharacteristics();
     const writeChar = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
