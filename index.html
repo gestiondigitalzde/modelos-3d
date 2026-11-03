@@ -40,6 +40,7 @@
   <button class="btn-gray" onclick="consultarDatos()">🔍 Consultar y Cargar Etiqueta</button>
 
   <div class="canvas-container">
+    <!-- El lienzo físico sigue siendo de 384x240 (50x30mm) -->
     <canvas id="labelCanvas" width="384" height="240"></canvas>
   </div>
 
@@ -53,7 +54,7 @@
 <div id="qrContainer" style="display:none;"></div>
 
 <script>
-// Tu URL real de Apps Script
+// AQUÍ DEBES PEGAR TU URL REAL DE APPS SCRIPT
 const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyi7rPi2UHOoHNelQyo0RBiu8S9SMcrcobjq8Fh4pxSq7_3HmtMnolCE0537LgRLgGtRQ/exec";
 
 const ICO_MUEBLE = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'><path d='M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3a4 4 0 0 0-4 4v5a1 1 0 0 0 1 1h1v2a1 1 0 0 0 2 0v-2h16v2a1 1 0 0 0 2 0v-2h1a1 1 0 0 0 1-1v-5a4 4 0 0 0-4-4zm-14-3h12v3h-1.1a3 3 0 0 0-5.8 0H8.9a3 3 0 0 0-5.8 0H6V6zm16 11H2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4z'/></svg>";
@@ -72,11 +73,11 @@ function generarQRDataUrl(texto) {
   return new Promise((resolve) => {
     const cont = document.getElementById('qrContainer');
     cont.innerHTML = "";
-    // Tamaño exacto para nitidez térmica
+    // Aumentamos el tamaño a 130px para mayor legibilidad
     new QRCode(cont, {
       text: texto,
-      width: 123,
-      height: 123,
+      width: 130,
+      height: 130,
       correctLevel: QRCode.CorrectLevel.L
     });
 
@@ -110,42 +111,49 @@ async function renderizarEtiqueta(d) {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // 1. QR generado localmente. Lo empezamos en X=24, Y=26 para crear un gran margen de seguridad
   const enlaceDirecto = URL_APPS_SCRIPT + "?ver_art=" + encodeURIComponent(d.cop);
   const qrUrl = await generarQRDataUrl(enlaceDirecto);
   const imgQR = await cargarImagen(qrUrl);
-  ctx.drawImage(imgQR, 8, 8, 123, 123);
+  ctx.drawImage(imgQR, 24, 26, 130, 130);
 
+  // 2. Columna de datos a la derecha del QR (Empieza en X=168, seguro del borde derecho)
   ctx.fillStyle = '#000000';
   ctx.textAlign = 'left';
 
-  ctx.font = '900 22px Arial, Helvetica, sans-serif';
-  ctx.fillText('ODS', 140, 32);
+  ctx.font = '900 20px Arial, Helvetica, sans-serif';
+  ctx.fillText('ODS', 168, 45);
 
-  ctx.font = '900 19px Arial, Helvetica, sans-serif';
-  ctx.fillText(d.ods, 140, 64);
+  ctx.font = '900 17px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.ods, 168, 68);
 
   ctx.font = '900 18px Arial, Helvetica, sans-serif';
-  ctx.fillText('C.OP: ' + d.cop, 140, 96);
+  ctx.fillText('C.OP: ' + d.cop, 168, 93);
 
-  ctx.fillRect(8, 138, 368, 2);
-
+  // 3. Iconos y textos de Locación y Fecha (apilados debajo de C.OP)
   const [ico1, ico2, ico3] = await Promise.all([
     cargarImagen(ICO_MUEBLE),
     cargarImagen(ICO_MAPA),
     cargarImagen(ICO_CAL)
   ]);
 
-  ctx.drawImage(ico1, 8, 144, 28, 28);
-  ctx.font = '900 19px Arial, Helvetica, sans-serif';
-  ctx.fillText(d.nombreArticulo.substring(0, 24), 44, 165);
+  // Locación
+  ctx.drawImage(ico2, 168, 105, 22, 22);
+  ctx.font = '900 17px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.locacion.substring(0, 16), 195, 122); // Cortado a 16 letras para que no choque
 
-  ctx.drawImage(ico2, 8, 178, 28, 28);
-  ctx.font = '900 19px Arial, Helvetica, sans-serif';
-  ctx.fillText(d.locacion.substring(0, 24), 44, 199);
+  // Fecha
+  ctx.drawImage(ico3, 168, 133, 22, 22);
+  ctx.font = '900 17px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.fechaEvento, 195, 150);
 
-  ctx.drawImage(ico3, 8, 212, 28, 28);
-  ctx.font = '900 19px Arial, Helvetica, sans-serif';
-  ctx.fillText(d.fechaEvento, 44, 233);
+  // 4. Línea divisoria centrada y con márgenes (X empieza en 20 y termina en 364)
+  ctx.fillRect(20, 172, 344, 2);
+
+  // 5. Nombre del artículo hasta abajo, con mucho margen inferior de seguridad
+  ctx.drawImage(ico1, 24, 185, 30, 30);
+  ctx.font = '900 20px Arial, Helvetica, sans-serif';
+  ctx.fillText(d.nombreArticulo.substring(0, 26), 62, 208);
 }
 
 function consultarDatos() {
@@ -226,6 +234,9 @@ function empaquetarNiimbot(cmd, payload = []) {
   return new Uint8Array([0x55, 0x55, ...p, check, 0xaa, 0xaa]);
 }
 
+// Función de pausa para no ahogar la memoria de la impresora térmica
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
 async function imprimirBluetooth() {
   const msg = document.getElementById('msg');
   try {
@@ -237,7 +248,6 @@ async function imprimirBluetooth() {
     msg.style.color = "#0056b3";
     msg.innerText = "Buscando Niimbot B1...";
 
-    // Lista maestra de canales UUID para todas las versiones de Niimbot B1
     const serviciosNiimbot = [
       "0000e7ce-0000-1000-8000-00805f9b34fb", 
       "0000e7fe-0000-1000-8000-00805f9b34fb", 
@@ -253,14 +263,12 @@ async function imprimirBluetooth() {
     msg.innerText = "Conectando a la impresora...";
     const server = await device.gatt.connect();
     
-    // Barrido automático para encontrar el canal correcto
     let service = null;
     for (let uuid of serviciosNiimbot) {
       try {
         service = await server.getPrimaryService(uuid);
         if (service) break;
       } catch (e) {
-        // Continúa buscando
       }
     }
 
@@ -292,7 +300,6 @@ async function enviarTrabajoBLE(char) {
 
   const umbral = 160;
 
-  // 1. Convertir la imagen del canvas a un mapa de bits en blanco y negro puro
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
@@ -303,31 +310,36 @@ async function enviarTrabajoBLE(char) {
     }
   }
 
-  // 2. SECUENCIA DE INICIALIZACIÓN NIIMBOT
-  // Iniciar documento (0x01)
+  // Comandos de inicialización de la Niimbot con pausas para estabilización
   await char.writeValue(empaquetarNiimbot(0x01, [0x01]));
-  // Setear densidad de impresión (0x21) - Opcional pero recomendado (0x01 = normal)
+  await delay(20);
+  
   await char.writeValue(empaquetarNiimbot(0x21, [0x01]));
-  // Setear tipo de papel (0x23) - 0x01 = Papel con espacios (gap)
-  await char.writeValue(empaquetarNiimbot(0x23, [0x01]));
-  // Iniciar página (0x03)
-  await char.writeValue(empaquetarNiimbot(0x03, [0x01]));
+  await delay(20);
 
-  // 3. ENVIAR LOS DATOS DE LA IMAGEN LÍNEA POR LÍNEA
+  await char.writeValue(empaquetarNiimbot(0x23, [0x01]));
+  await delay(20);
+
+  await char.writeValue(empaquetarNiimbot(0x03, [0x01]));
+  await delay(20);
+
+  // Envío de líneas con pausa microscópica para evitar buffer overflow
   for (let line = 0; line < h; line++) {
     const start = line * bytesPerLine;
     const slice = Array.from(bitmap.slice(start, start + bytesPerLine));
-    // El comando 0x85 es para enviar datos de imagen.
     const payload = [(line >> 8) & 0xff, line & 0xff, ...slice];
     await char.writeValue(empaquetarNiimbot(0x85, payload));
+    
+    await delay(10); // Pausa vital de 10ms por línea
   }
 
-  // 4. SECUENCIA DE FINALIZACIÓN Y CORTE
-  // Finalizar página (0xE3)
+  // Secuencia de corte y finalización
   await char.writeValue(empaquetarNiimbot(0xE3, [0x01]));
-  // Imprimir y avanzar papel (0xF3)
+  await delay(20);
+  
   await char.writeValue(empaquetarNiimbot(0xF3, [0x01]));
-  // Finalizar documento (0x0F)
+  await delay(20);
+
   await char.writeValue(empaquetarNiimbot(0x0F, [0x01]));
 }
 </script>
